@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Guides
+    url: https://mate-wayland.org/guides/
+    about: NVIDIA graphics, screens and scaling
+  - name: Security problem
+    url: https://github.com/mate-wayland/mate-wayland-desktop/security/advisories/new
+    about: Report a vulnerability privately

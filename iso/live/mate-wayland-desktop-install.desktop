@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Install MATE Wayland Desktop
+Comment=Install this system to your computer's disk
+Exec=mate-wayland-desktop-install
+Icon=system-software-install
+Terminal=false
+Categories=System;

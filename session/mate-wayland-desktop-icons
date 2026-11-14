@@ -1,0 +1,63 @@
+#!/bin/sh
+# Builds the panel icons of the "MATE Wayland Desktop" icon theme from the
+# installed Yaru theme, following /usr/share/mate-wayland-desktop/icon-aliases.conf.
+# Run by this package's postinst; run it again after Yaru is updated.
+#
+# Yaru draws these icons in mid-grey, meant to be recoloured by the toolkit.
+# Under their plain names they are not recoloured, so the grey is darkened
+# here to suit the light panel; coloured accents (charging, low) are kept.
+set -eu
+umask 022
+
+src=${1:-/usr/share/icons/Yaru/scalable}
+theme=${2:-/usr/share/icons/mate-wayland-desktop}
+conf=${3:-/usr/share/mate-wayland-desktop/icon-aliases.conf}
+out="$theme/scalable/status"
+colour='#3c3c3c'
+
+copy() {
+    [ -f "$src/$2.svg" ] || return 0
+    sed "s/fill=\"gray\"/fill=\"$colour\"/g; s/fill=\"#808080\"/fill=\"$colour\"/g" \
+        "$src/$2.svg" > "$out/$1.svg"
+}
+
+# A badge is stamped over another icon: the same picture at half size in the
+# bottom right corner, in the same dark colour as the other icons, with a
+# light edge so it stays readable where it overlaps the icon beneath.
+badge() {
+    [ -f "$src/$2.svg" ] || return 0
+    inner() {
+        sed -e '1s/ width="[^"]*"//; 1s/ height="[^"]*"//' \
+            -e '1s/<svg /<svg x="8" y="8" width="8" height="8" /' \
+            -e "s/fill=\"gray\"/$1/g; s/fill=\"#808080\"/$1/g" \
+            "$src/$2.svg" | grep -v '^<?xml'
+    }
+    {
+        echo '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">'
+        inner 'fill="#f2f2f2" stroke="#f2f2f2" stroke-width="3" stroke-linejoin="round"' "$2"
+        inner "fill=\"$colour\"" "$2"
+        echo '</svg>'
+    } > "$out/$1.svg"
+}
+
+mkdir -p "$out"
+rm -f "$out"/*.svg
+grep -v '^#' "$conf" | grep -v '^$' | while read -r name target kind; do
+    if [ "$kind" = badge ]; then
+        badge "$name" "$target"
+    else
+        copy "$name" "$target"
+    fi
+done
+
+# nm-applet's "connecting" animations: one still icon for every frame.
+for stage in 01 02 03; do
+    for frame in 01 02 03 04 05 06 07 08 09 10 11; do
+        copy "nm-stage$stage-connecting$frame" status/network-wireless-acquiring-symbolic
+    done
+done
+for frame in 01 02 03 04 05 06 07 08 09 10 11 12 13 14; do
+    copy "nm-vpn-connecting$frame" status/network-vpn-acquiring-symbolic
+done
+
+gtk-update-icon-cache -q -f "$theme" 2>/dev/null || true

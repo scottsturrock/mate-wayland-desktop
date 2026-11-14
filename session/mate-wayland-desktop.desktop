@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=MATE Wayland Desktop
+Comment=The MATE desktop on Wayland, using the labwc compositor
+Exec=mate-wayland-desktop-session
+TryExec=labwc
+Type=Application
+DesktopNames=MATE

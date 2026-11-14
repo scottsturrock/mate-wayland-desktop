@@ -1,0 +1,7 @@
+# Firefox from Mozilla's own package repository. Ubuntu's "firefox" package
+# only installs a snap, and this system has no snap support.
+Types: deb
+URIs: https://packages.mozilla.org/apt
+Suites: mozilla
+Components: main
+Signed-By: /etc/apt/keyrings/packages.mozilla.org.asc

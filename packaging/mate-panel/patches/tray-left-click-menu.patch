@@ -1,0 +1,30 @@
+--- a/applets/notification_area/status-notifier/sn-item-v0.c
++++ b/applets/notification_area/status-notifier/sn-item-v0.c
+@@ -1233,9 +1233,25 @@
+ {
+   SnItemV0 *v0;
+ 
+-  v0 = SN_ITEM_V0 (user_data);
++  GError *error = NULL;
+ 
+-  sn_item_v0_gen_call_activate_finish (v0->proxy, res, NULL);
++  sn_item_v0_gen_call_activate_finish (SN_ITEM_V0_GEN (source_object), res, &error);
++
++  if (error == NULL)
++    return;
++
++  /* Items that only provide a menu (application indicators, for example
++   * nm-applet --indicator) do not implement Activate. Show their menu on
++   * left click instead of doing nothing. */
++  if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
++    {
++      gboolean handled;
++
++      v0 = SN_ITEM_V0 (user_data);
++      g_signal_emit_by_name (v0, "popup-menu", &handled);
++    }
++
++  g_error_free (error);
+ }
+ 
+ static void

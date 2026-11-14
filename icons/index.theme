@@ -1,0 +1,26 @@
+[Icon Theme]
+Name=MATE Wayland Desktop
+Comment=Yaru, with its flat panel icons under the names MATE's applets ask for
+Inherits=Yaru,Humanity,hicolor
+Directories=scalable/status,scalable/places,scalable/apps
+
+[scalable/status]
+Size=24
+MinSize=8
+MaxSize=512
+Type=Scalable
+Context=Status
+
+[scalable/places]
+Size=24
+MinSize=8
+MaxSize=512
+Type=Scalable
+Context=Places
+
+[scalable/apps]
+Size=48
+MinSize=8
+MaxSize=512
+Type=Scalable
+Context=Applications

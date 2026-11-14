@@ -1,0 +1,8 @@
+/* Lock screen text is drawn over the wallpaper: make it light. */
+#clock-label,
+#date-label,
+#input-label,
+#user-name {
+    color: #ffffff;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}

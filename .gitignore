@@ -1,0 +1,9 @@
+packaging/build/
+tests/out/
+iso/work/
+iso/out/
+__pycache__/
+iso/cache/
+iso/build.log
+iso/.build-progress
+release/

@@ -1,0 +1,95 @@
+# Desktop. Installed without recommended packages to keep the image small,
+# so everything wanted is listed here.
+
+# Compositor and Wayland plumbing
+labwc
+xwayland
+swaybg
+swayidle
+gtklock
+grim
+slurp
+wl-clipboard
+wdisplays
+kanshi
+xdg-desktop-portal
+xdg-desktop-portal-wlr
+xdg-desktop-portal-gtk
+
+# MATE (the components in packaging/packages.conf come from our builds)
+mate-applets
+mate-indicator-applet
+mate-terminal
+mate-control-center
+mate-settings-daemon
+mate-notification-daemon
+mate-polkit
+mate-system-monitor
+mate-calc
+mate-menus
+mate-themes
+mate-icon-theme
+mate-backgrounds
+pluma
+atril
+eom
+engrampa
+
+# Login screen
+lightdm
+lightdm-gtk-greeter
+xserver-xorg-core
+xserver-xorg-input-libinput
+
+# Sound, storage, network, printing basics
+pipewire-audio
+wireplumber
+pavucontrol
+network-manager-applet
+gvfs-backends
+gvfs-fuse
+udisks2
+upower
+polkitd
+xdg-user-dirs
+xdg-user-dirs-gtk
+xdg-utils
+
+# Fonts and icons
+fonts-noto-core
+fonts-dejavu-core
+fonts-liberation
+fonts-noto-color-emoji
+fonts-ubuntu
+yaru-theme-icon
+yaru-theme-gtk
+adwaita-icon-theme
+humanity-icon-theme
+
+# Our helper needs these
+python3-gi
+gir1.2-gtk-3.0
+# Tray icons: lets GTK and Python programs (Deluge and others) show their
+# icon in the notification area. Without the Python binding they fall back
+# to the X11-only tray, which does not exist on Wayland.
+libayatana-appindicator3-1
+gir1.2-ayatanaappindicator3-0.1
+# For the wallpaper on monitors Caja does not cover
+gir1.2-gtklayershell-0.1
+python3-gi-cairo
+
+# Boot splash
+plymouth
+plymouth-theme-spinner
+
+# VirtualBox guest support: shared folders, time sync, display resizing and
+# host-side command access (VBoxManage guestcontrol) when run in a
+# VirtualBox VM. The service only starts inside VirtualBox.
+virtualbox-guest-utils
+# Display resizing in VirtualBox: VBoxDRMClient is in this package (it also
+# pulls in the X server core, which the X11 half of the package needs).
+virtualbox-guest-x11
+wlr-randr
+
+# Web browser, from Mozilla's repository (iso/firefox/mozilla.sources)
+firefox

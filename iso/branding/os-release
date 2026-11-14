@@ -1,0 +1,12 @@
+PRETTY_NAME="MATE Wayland Desktop 26.04"
+NAME="MATE Wayland Desktop"
+VERSION_ID="26.04"
+VERSION="26.04 (based on Ubuntu 26.04 LTS)"
+VERSION_CODENAME=resolute
+ID=ubuntu
+ID_LIKE=debian
+HOME_URL="https://mate-wayland.org/"
+SUPPORT_URL="https://mate-wayland.org/"
+BUG_REPORT_URL="https://mate-wayland.org/"
+UBUNTU_CODENAME=resolute
+LOGO=mate-wayland-desktop

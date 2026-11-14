@@ -1,0 +1,24 @@
+---
+componentName: mate-wayland-desktop
+windowExpanding: normal
+windowSize: 900px,600px
+strings:
+    productName:         MATE Wayland Desktop
+    shortProductName:    MATE Wayland Desktop
+    version:             26.04
+    shortVersion:        26.04
+    versionedName:       MATE Wayland Desktop 26.04
+    shortVersionedName:  MATE Wayland Desktop 26.04
+    bootloaderEntryName: MATE Wayland Desktop
+    productUrl:          https://mate-wayland.org/
+    supportUrl:          https://mate-wayland.org/
+images:
+    productLogo:         "logo.png"
+    productIcon:         "logo.png"
+    productWelcome:      "logo.png"
+slideshow:               "show.qml"
+slideshowAPI:            1
+style:
+   SidebarBackground:    "#3B0F35"
+   SidebarText:          "#ffffff"
+   SidebarTextCurrent:   "#E95420"

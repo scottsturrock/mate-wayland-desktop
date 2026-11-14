@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE wallpapers SYSTEM "mate-wp-list.dtd">
+<!-- Makes the project's wallpaper appear in Appearance > Background. -->
+<wallpapers>
+  <wallpaper deleted="false">
+    <name>MATE Wayland Desktop</name>
+    <filename>/usr/share/backgrounds/mate-wayland-desktop/mate-wayland-desktop.svg</filename>
+    <options>zoom</options>
+    <shade_type>solid</shade_type>
+    <pcolor>#3B0F35</pcolor>
+    <scolor>#E95420</scolor>
+  </wallpaper>
+</wallpapers>

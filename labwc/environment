@@ -1,0 +1,13 @@
+# Environment for everything started inside the session.
+
+# Applications menu uses MATE's menu files.
+XDG_MENU_PREFIX=mate-
+
+# Prefer native Wayland, fall back to XWayland.
+GDK_BACKEND=wayland,x11
+QT_QPA_PLATFORM=wayland;xcb
+
+# Firefox as a native Wayland application.
+MOZ_ENABLE_WAYLAND=1
+
+XCURSOR_SIZE=24

@@ -1,0 +1,112 @@
+#!/usr/bin/python3
+"""Makes "Log Out" in the MATE panel menu work in the mate-wayland-desktop
+session.
+
+The panel asks a session manager (D-Bus name org.gnome.SessionManager) to log
+out. This session does not run mate-session-manager, so this small service
+answers that request: it asks for confirmation, then tells labwc to exit,
+which ends the session and returns to the login screen.
+"""
+import os
+import subprocess
+import sys
+
+import gi
+
+gi.require_version("Gtk", "3.0")
+from gi.repository import Gio, GLib, Gtk  # noqa: E402
+
+NAME = "org.gnome.SessionManager"
+PATH = "/org/gnome/SessionManager"
+XML = """
+<node>
+  <interface name="org.gnome.SessionManager">
+    <method name="Logout"><arg type="u" name="mode" direction="in"/></method>
+    <method name="Shutdown"/>
+    <method name="Setenv">
+      <arg type="s" name="variable" direction="in"/>
+      <arg type="s" name="value" direction="in"/>
+    </method>
+    <method name="RegisterClient">
+      <arg type="s" name="app_id" direction="in"/>
+      <arg type="s" name="client_startup_id" direction="in"/>
+      <arg type="o" name="client_id" direction="out"/>
+    </method>
+    <method name="CanShutdown"><arg type="b" direction="out"/></method>
+    <method name="IsSessionRunning"><arg type="b" direction="out"/></method>
+  </interface>
+</node>
+"""
+
+# Logout modes used by the panel.
+MODE_NORMAL = 0  # ask first
+
+
+def end_session():
+    # labwc sets LABWC_PID for its children; --exit targets that instance.
+    subprocess.call(["labwc", "--exit"])
+
+
+def confirm_logout():
+    dialog = Gtk.MessageDialog(
+        message_type=Gtk.MessageType.QUESTION,
+        text="Log out of this system now?",
+    )
+    dialog.format_secondary_text("Unsaved work in open applications will be lost.")
+    dialog.add_button("_Cancel", Gtk.ResponseType.CANCEL)
+    dialog.add_button("_Log Out", Gtk.ResponseType.OK)
+    dialog.set_default_response(Gtk.ResponseType.CANCEL)
+    dialog.set_title("Log Out")
+    dialog.set_keep_above(True)
+
+    def on_response(dlg, response):
+        dlg.destroy()
+        if response == Gtk.ResponseType.OK:
+            end_session()
+
+    dialog.connect("response", on_response)
+    dialog.show_all()
+
+
+def on_call(conn, sender, path, iface, method, params, invocation):
+    if method == "Logout":
+        (mode,) = params.unpack()
+        invocation.return_value(None)
+        if mode == MODE_NORMAL:
+            GLib.idle_add(confirm_logout)
+        else:
+            GLib.idle_add(end_session)
+    elif method == "Shutdown":
+        invocation.return_value(None)
+        subprocess.call(["systemctl", "poweroff", "-i"])
+    elif method == "Setenv":
+        # mate-settings-daemon passes toolkit scaling variables this way.
+        invocation.return_value(None)
+    elif method == "RegisterClient":
+        # Some MATE programs announce themselves to the session manager at
+        # startup. Accept, so they do not log errors; nothing is tracked.
+        invocation.return_value(GLib.Variant("(o)", (PATH + "/Client0",)))
+    elif method == "CanShutdown":
+        invocation.return_value(GLib.Variant("(b)", (True,)))
+    elif method == "IsSessionRunning":
+        invocation.return_value(GLib.Variant("(b)", (True,)))
+
+
+def on_bus(conn, name):
+    info = Gio.DBusNodeInfo.new_for_xml(XML).interfaces[0]
+    conn.register_object(PATH, info, on_call, None, None)
+
+
+def on_lost(conn, name):
+    # Another session manager already owns the name (for example when this
+    # runs inside another desktop). Do nothing rather than interfere.
+    sys.exit(0)
+
+
+if "LABWC_PID" not in os.environ:
+    sys.exit("mate-wayland-desktop-logout: not running under labwc")
+
+Gio.bus_own_name(
+    Gio.BusType.SESSION, NAME, Gio.BusNameOwnerFlags.DO_NOT_QUEUE, on_bus, None, on_lost
+)
+Gtk.main()

@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<!-- Right-click menu on the bare desktop, used only if caja is not drawing
+     the desktop. -->
+<openbox_menu>
+  <menu id="root-menu" label="">
+    <item label="Terminal">
+      <action name="Execute" command="mate-terminal"/>
+    </item>
+    <item label="Files">
+      <action name="Execute" command="caja"/>
+    </item>
+    <item label="Control Center">
+      <action name="Execute" command="mate-control-center"/>
+    </item>
+    <item label="Displays">
+      <action name="Execute" command="wdisplays"/>
+    </item>
+    <separator/>
+    <item label="Lock Screen">
+      <action name="Execute" command="gtklock"/>
+    </item>
+    <item label="Log Out">
+      <action name="Exit"/>
+    </item>
+  </menu>
+</openbox_menu>

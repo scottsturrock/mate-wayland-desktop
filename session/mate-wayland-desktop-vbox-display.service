@@ -1,0 +1,15 @@
+[Unit]
+Description=VirtualBox display size hints for Wayland sessions
+Documentation=file:/usr/share/doc/mate-wayland-desktop/README.md
+# Ubuntu's VirtualBox guest packages only start their display helper for
+# X11 sessions. On Wayland it must run as a system service.
+ConditionVirtualization=oracle
+ConditionPathExists=/usr/bin/VBoxDRMClient
+After=virtualbox-guest-utils.service
+
+[Service]
+ExecStart=/usr/bin/VBoxDRMClient
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

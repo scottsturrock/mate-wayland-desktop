@@ -1,0 +1,28 @@
+#!/usr/bin/python3
+"""Carries appearance choices made in MATE's settings over to Wayland apps.
+
+MATE's Appearance dialog writes the theme, icon theme and fonts to
+org.mate.interface. On X11 the settings daemon hands them to applications,
+but GTK applications running natively on Wayland read
+org.gnome.desktop.interface instead. Without this, changing the theme or
+font in MATE's settings has no visible effect in this session.
+
+Only copies a value when the user changes it; defaults come from the
+gschema override shipped with this package.
+"""
+from gi.repository import Gio, GLib
+
+KEYS = ("gtk-theme", "icon-theme", "font-name", "document-font-name",
+        "monospace-font-name")
+
+mate = Gio.Settings.new("org.mate.interface")
+gnome = Gio.Settings.new("org.gnome.desktop.interface")
+
+
+def on_changed(settings, key):
+    if key in KEYS:
+        gnome.set_string(key, settings.get_string(key))
+
+
+mate.connect("changed", on_changed)
+GLib.MainLoop().run()

@@ -1,0 +1,45 @@
+#!/bin/sh
+# Starts labwc with the mate-wayland-desktop configuration.
+# A per-user copy in ~/.config/mate-wayland-desktop takes priority over the system one.
+
+user_dir="${XDG_CONFIG_HOME:-$HOME/.config}/mate-wayland-desktop"
+if [ -f "$user_dir/rc.xml" ]; then
+    config_dir=$user_dir
+else
+    config_dir=/etc/xdg/mate-wayland-desktop
+fi
+
+export XDG_CURRENT_DESKTOP=MATE
+export XDG_SESSION_DESKTOP=mate
+export XDG_SESSION_TYPE=wayland
+export XDG_MENU_PREFIX=mate-
+
+# Keyboard layout chosen at install time. On Wayland the compositor owns
+# the keyboard; labwc takes the layout from XKB_DEFAULT_* (the Xfce Wayland
+# session does the same). A layout set in the user's own labwc environment
+# file still wins.
+if [ -r /etc/default/keyboard ]; then
+    . /etc/default/keyboard
+    [ -n "${XKBLAYOUT:-}" ] && export XKB_DEFAULT_LAYOUT="$XKBLAYOUT"
+    [ -n "${XKBVARIANT:-}" ] && export XKB_DEFAULT_VARIANT="$XKBVARIANT"
+    [ -n "${XKBMODEL:-}" ] && export XKB_DEFAULT_MODEL="$XKBMODEL"
+    [ -n "${XKBOPTIONS:-}" ] && export XKB_DEFAULT_OPTIONS="$XKBOPTIONS"
+fi
+
+log_dir="${XDG_STATE_HOME:-$HOME/.local/state}/mate-wayland-desktop"
+mkdir -p "$log_dir"
+
+# Normal start, using the graphics card.
+started=$(date +%s)
+labwc -C "$config_dir" >"$log_dir/labwc.log" 2>&1
+status=$?
+
+# If labwc failed straight away, the graphics driver has no usable 3D
+# acceleration (common in virtual machines without 3D enabled). Start again
+# with software rendering, which is slower but works everywhere.
+if [ "$status" -ne 0 ] && [ $(( $(date +%s) - started )) -lt 10 ]; then
+    export WLR_RENDERER=pixman
+    export WLR_NO_HARDWARE_CURSORS=1
+    exec labwc -C "$config_dir" >"$log_dir/labwc-software.log" 2>&1
+fi
+exit "$status"

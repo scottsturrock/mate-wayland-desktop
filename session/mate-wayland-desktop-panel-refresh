@@ -1,0 +1,39 @@
+#!/usr/bin/python3
+"""Workaround: restart the panel when a monitor is added or removed.
+
+After the monitor layout changes, mate-panel 1.29.2 on Wayland redraws
+itself one pixel short, which leaves a stray line along the panel's edge
+(and sometimes a focus outline around the menu bar) until it is restarted.
+This restarts it once the layout has settled.
+
+Remove this helper, its line in labwc/autostart and its entry in
+packaging/build-session-deb.sh once the panel is fixed.
+"""
+import gi
+
+gi.require_version("Gdk", "3.0")
+gi.require_version("Gtk", "3.0")
+from gi.repository import Gdk, GLib, Gtk  # noqa: E402
+
+pending = 0
+
+
+def restart_panel():
+    global pending
+    pending = 0
+    GLib.spawn_command_line_async("mate-panel --replace")
+    return False
+
+
+def on_monitors_changed(*_args):
+    """Several events arrive for one change; act once, after they stop."""
+    global pending
+    if pending:
+        GLib.source_remove(pending)
+    pending = GLib.timeout_add(1500, restart_panel)
+
+
+display = Gdk.Display.get_default()
+display.connect("monitor-added", on_monitors_changed)
+display.connect("monitor-removed", on_monitors_changed)
+Gtk.main()

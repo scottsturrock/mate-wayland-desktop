@@ -1,0 +1,100 @@
+#!/usr/bin/python3
+"""Draws the MATE desktop background on every monitor Caja does not cover.
+
+On X11, MATE's wallpaper spans all monitors. On Wayland, Caja's desktop
+(wallpaper and icons) is tied to one monitor, and any other monitor shows
+the bare compositor: black, with labwc's own menu. This draws the same
+background there, using MATE's own renderer (MateBG), so the picture, its
+placement mode and the colour gradient match, and it follows changes made
+in the Appearance settings.
+"""
+import gi
+
+gi.require_version("Gdk", "3.0")
+gi.require_version("Gtk", "3.0")
+gi.require_version("GtkLayerShell", "0.1")
+gi.require_version("MateDesktop", "2.0")
+from gi.repository import Gdk, Gio, GLib, Gtk, GtkLayerShell, MateDesktop  # noqa: E402
+
+background = MateDesktop.BG.new()
+background.load_from_preferences()
+windows = {}
+
+
+def on_draw(area, cr):
+    width = area.get_allocated_width()
+    height = area.get_allocated_height()
+    surface = background.create_surface(area.get_window(), width, height, False)
+    cr.set_source_surface(surface, 0, 0)
+    cr.paint()
+    return True
+
+
+def on_button_press(area, event):
+    """Right click: the one desktop action that makes sense on a monitor
+    without icons."""
+    if event.button != 3:
+        return False
+    menu = Gtk.Menu()
+    item = Gtk.MenuItem.new_with_label("Change Desktop Background")
+    item.connect("activate", lambda *_: GLib.spawn_command_line_async(
+        "mate-appearance-properties --show-page=background"))
+    menu.append(item)
+    menu.show_all()
+    menu.popup_at_pointer(event)
+    return True
+
+
+def add_window(monitor):
+    window = Gtk.Window()
+    GtkLayerShell.init_for_window(window)
+    GtkLayerShell.set_namespace(window, "mate-wayland-desktop-wallpaper")
+    GtkLayerShell.set_layer(window, GtkLayerShell.Layer.BACKGROUND)
+    GtkLayerShell.set_monitor(window, monitor)
+    for edge in (GtkLayerShell.Edge.TOP, GtkLayerShell.Edge.BOTTOM,
+                 GtkLayerShell.Edge.LEFT, GtkLayerShell.Edge.RIGHT):
+        GtkLayerShell.set_anchor(window, edge, True)
+    # Cover the whole monitor, including the space panels reserve.
+    GtkLayerShell.set_exclusive_zone(window, -1)
+    area = Gtk.DrawingArea()
+    area.connect("draw", on_draw)
+    area.add_events(Gdk.EventMask.BUTTON_PRESS_MASK)
+    area.connect("button-press-event", on_button_press)
+    window.add(area)
+    window.show_all()
+    windows[monitor] = window
+
+
+def sync_monitors(*_args):
+    display = Gdk.Display.get_default()
+    wanted = [display.get_monitor(i) for i in range(display.get_n_monitors())]
+    # Caja draws the desktop on the first monitor.
+    wanted = wanted[1:]
+    for monitor in list(windows):
+        if monitor not in wanted:
+            windows.pop(monitor).destroy()
+    for monitor in wanted:
+        if monitor not in windows:
+            add_window(monitor)
+
+
+def redraw(*_args):
+    for window in windows.values():
+        window.queue_draw()
+
+
+def reload(*_args):
+    """The background settings changed (Appearance dialog, gsettings)."""
+    background.load_from_preferences()
+    redraw()
+
+
+display = Gdk.Display.get_default()
+display.connect("monitor-added", sync_monitors)
+display.connect("monitor-removed", sync_monitors)
+settings = Gio.Settings.new("org.mate.background")
+settings.connect("changed", reload)
+background.connect("changed", redraw)
+background.connect("transitioned", redraw)
+sync_monitors()
+Gtk.main()

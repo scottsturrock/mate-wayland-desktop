@@ -1,0 +1,12 @@
+#!/bin/sh
+# Starts the installer from the live session. Calamares must run as root.
+# Ubuntu's sudo does not pass the user's environment through (-E is not
+# supported), so the variables root needs to reach the user's Wayland
+# display are passed explicitly.
+exec sudo env \
+    XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
+    WAYLAND_DISPLAY="$WAYLAND_DISPLAY" \
+    DISPLAY="${DISPLAY:-}" \
+    XDG_CURRENT_DESKTOP="${XDG_CURRENT_DESKTOP:-MATE}" \
+    QT_QPA_PLATFORM="wayland;xcb" \
+    calamares -D6

@@ -1,0 +1,36 @@
+# Default panel layout for new users: the classic two panels, plus the
+# volume control in the top right as in GNOME 2.
+[org.mate.panel]
+default-layout='mate-wayland-desktop'
+
+# Look: MATE's own Menta theme, Noto Sans for text, and Ubuntu's Yaru icons
+# (orange folders) through our own icon theme, which is Yaru plus its flat
+# panel icons under the names MATE's applets ask for (see icons/). GTK applications running natively on Wayland read the
+# GNOME interface settings, not MATE's, so both are set.
+[org.mate.interface]
+gtk-theme='Menta'
+icon-theme='mate-wayland-desktop'
+font-name='Noto Sans 10'
+document-font-name='Noto Sans 10'
+
+[org.gnome.desktop.interface]
+gtk-theme='Menta'
+icon-theme='mate-wayland-desktop'
+font-name='Noto Sans 10'
+document-font-name='Noto Sans 10'
+
+# Wallpaper: the project's own (wallpapers/), an SVG so it is sharp at any
+# resolution. The colour is what shows while the picture loads.
+[org.mate.background]
+picture-filename='/usr/share/backgrounds/mate-wayland-desktop/mate-wayland-desktop.svg'
+picture-options='zoom'
+color-shading-type='solid'
+primary-color='#3B0F35'
+secondary-color='#E95420'
+
+# Terminal: grey text on black, not the system theme's colours. (The
+# schema is relocatable; this sets the default for every profile.)
+[org.mate.terminal.profile]
+use-theme-colors=false
+foreground-color='#AAAAAA'
+background-color='#000000'

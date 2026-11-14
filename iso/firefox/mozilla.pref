@@ -1,0 +1,4 @@
+# Prefer Mozilla's packages over Ubuntu's snap stub of the same name.
+Package: *
+Pin: origin packages.mozilla.org
+Pin-Priority: 1000

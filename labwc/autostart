@@ -1,0 +1,106 @@
+#!/bin/sh
+# Programs started with the session. labwc runs this file once at startup.
+# Each program's output goes to ~/.local/state/mate-wayland-desktop/<name>.log
+
+log="${XDG_STATE_HOME:-$HOME/.local/state}/mate-wayland-desktop"
+mkdir -p "$log"
+
+start() {
+    name=$1; shift
+    "$@" >"$log/$name.log" 2>&1 &
+}
+
+multiarch=$(dpkg-architecture -qDEB_HOST_MULTIARCH 2>/dev/null || echo x86_64-linux-gnu)
+
+# Screen scale and layout: the saved layout for the connected screens, or
+# scale 2 on a very dense screen seen for the first time. Done before the
+# desktop and the panel start, so they start at the right size.
+if command -v mate-wayland-desktop-displays >/dev/null; then
+    mate-wayland-desktop-displays --init >"$log/displays.log" 2>&1
+fi
+
+# Desktop icons and wallpaper. Caja can only draw the desktop on Wayland
+# when built with layer-shell support (caja 1.28 or later). Older builds
+# would open the desktop as an ordinary window, so use a plain wallpaper.
+if ldd "$(command -v caja)" 2>/dev/null | grep -q gtk-layer-shell; then
+    start caja caja --no-default-window --force-desktop
+else
+    start swaybg swaybg -c '#58677d'
+fi
+
+# Answers the panel's "Log Out" request. Must be up before the panel starts.
+helper=$(command -v mate-wayland-desktop-logout || echo "${MATE_WAYLAND_DESKTOP_DIR:-}/session/mate-wayland-desktop-logout")
+if [ -x "$helper" ]; then
+    start logout-helper "$helper"
+    sleep 1
+fi
+
+# Panels, menus and applets.
+start mate-panel mate-panel
+
+# Settings daemon.
+for msd in /usr/libexec/mate-settings-daemon /usr/bin/mate-settings-daemon; do
+    [ -x "$msd" ] || continue
+    # 1.29 runs as a native Wayland client (needed for its display
+    # settings). Older versions crash that way, so fall back to XWayland
+    # if it does not stay up.
+    "$msd" >"$log/mate-settings-daemon.log" 2>&1 &
+    msd_pid=$!
+    sleep 2
+    if ! kill -0 "$msd_pid" 2>/dev/null; then
+        start mate-settings-daemon env GDK_BACKEND=x11 "$msd"
+    fi
+    break
+done
+
+# Password prompts for administrative actions.
+for agent in \
+    "/usr/lib/$multiarch/polkit-mate/polkit-mate-authentication-agent-1" \
+    /usr/libexec/polkit-mate-authentication-agent-1; do
+    if [ -x "$agent" ]; then start polkit "$agent"; break; fi
+done
+
+# Network icon in the notification area. On Wayland the panel only shows
+# "indicator" style tray icons, so nm-applet must run in that mode.
+if command -v nm-applet >/dev/null; then
+    start nm-applet nm-applet --indicator
+fi
+
+# The desktop background on every monitor Caja does not cover.
+if command -v mate-wayland-desktop-wallpaper >/dev/null; then
+    start wallpaper mate-wayland-desktop-wallpaper
+fi
+
+# Workaround for a stray line on the panel after a monitor is added or
+# removed (see the helper).
+if command -v mate-wayland-desktop-panel-refresh >/dev/null; then
+    start panel-refresh mate-wayland-desktop-panel-refresh
+fi
+
+# Theme and font changes made in MATE's settings reach Wayland applications.
+if command -v mate-wayland-desktop-settings >/dev/null; then
+    start settings-sync mate-wayland-desktop-settings
+fi
+
+# In a virtual machine, follow the size of the VM window.
+if command -v mate-wayland-desktop-vm-display >/dev/null; then
+    start vm-display mate-wayland-desktop-vm-display
+fi
+
+# Save changes made in the Displays window and apply them again when the
+# same screens are connected. A user's own kanshi configuration is used
+# instead, when there is one (the helper then does nothing).
+if [ -f "${XDG_CONFIG_HOME:-$HOME/.config}/kanshi/config" ]; then
+    start kanshi kanshi
+elif command -v mate-wayland-desktop-displays >/dev/null; then
+    mate-wayland-desktop-displays >>"$log/displays.log" 2>&1 &
+fi
+
+# Lock after 10 minutes idle and before sleep. Skipped in try-nested.sh and
+# in the live session (booted from the ISO), where there is no password to
+# unlock with.
+if [ -z "${MATE_WAYLAND_DESKTOP_NESTED:-}" ] && ! grep -q 'boot=casper' /proc/cmdline; then
+    start swayidle swayidle -w \
+        timeout 600 'gtklock -d' \
+        before-sleep 'gtklock -d'
+fi

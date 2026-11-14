@@ -1,0 +1,12 @@
+The system's name, as people see it.
+
+Visible names are ours: PRETTY_NAME and NAME in os-release,
+DISTRIB_DESCRIPTION in lsb-release, the login prompt (issue) and the
+welcome text (legal).
+
+Identifiers that programs read to decide compatibility are left as Ubuntu's:
+ID=ubuntu, DISTRIB_ID=Ubuntu and the release codename. Third-party
+installers, extra package repositories and driver tools check these.
+
+The files belong to Ubuntu's base-files package; build-iso.sh diverts them
+so that package updates do not put Ubuntu's versions back.

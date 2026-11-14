@@ -1,0 +1,5 @@
+# Needed only by the installer. The installer removes calamares and casper
+# from the installed system; what apt autoremove then drops is not checked.
+calamares
+qt6-wayland
+libxcb-cursor0

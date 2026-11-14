@@ -1,0 +1,30 @@
+#!/bin/sh
+# In a virtual machine, make the desktop follow the size of the VM window.
+#
+# The hypervisor's guest tools (VBoxDRMClient, spice-vdagent, ...) tell the
+# kernel the new preferred size, but labwc does not switch to it by itself.
+# This watches for those display events and applies the preferred size.
+# Started from the session's autostart; does nothing on real hardware.
+systemd-detect-virt --quiet --vm || exit 0
+command -v wlr-randr >/dev/null || exit 0
+
+last=
+apply() {
+    for c in /sys/class/drm/card*-*; do
+        [ "$(cat "$c/status" 2>/dev/null)" = connected ] || continue
+        mode=$(head -n 1 "$c/modes" 2>/dev/null)
+        [ -n "$mode" ] || continue
+        out=${c##*/}
+        out=${out#card*-}
+        [ "$out=$mode" = "$last" ] && continue
+        # --custom-mode, because the new size is usually not in the list
+        # of modes labwc knows; --mode would reject it.
+        wlr-randr --output "$out" --custom-mode "$mode" && last="$out=$mode"
+    done
+}
+
+udevadm monitor --udev --subsystem-match=drm | while read -r line; do
+    case "$line" in
+        *change*) sleep 0.3; apply ;;
+    esac
+done
