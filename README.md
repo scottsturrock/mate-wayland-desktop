@@ -140,7 +140,7 @@ The system is then back on `nouveau`.
 
 ## Documentation
 
-Guides, known problems and downloads are on the project's website,
+Guides and downloads are on the project's website,
 <https://mate-wayland.org/>. `CUSTOMISATIONS.md` in the source lists every
 difference from stock Ubuntu and MATE, and why.
 
