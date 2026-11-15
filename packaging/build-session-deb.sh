@@ -38,6 +38,11 @@ done
 install -Dm755 "$here/labwc/autostart" "$root/etc/xdg/mate-wayland-desktop/autostart"
 install -Dm644 "$here/panel/mate-wayland-desktop.layout" "$root/usr/share/mate-panel/layouts/mate-wayland-desktop.layout"
 install -Dm644 "$here/panel/90_mate-wayland-desktop.gschema.override" "$root/usr/share/glib-2.0/schemas/90_mate-wayland-desktop.gschema.override"
+install -Dm755 "$here/session/mate-wayland-desktop-keys" "$root/usr/bin/mate-wayland-desktop-keys"
+install -Dm755 "$here/session/mate-wayland-desktop-screenshot" "$root/usr/bin/mate-wayland-desktop-screenshot"
+install -Dm644 "$here/session/swaync/config.json" "$root/etc/xdg/mate-wayland-desktop/swaync/config.json"
+install -Dm644 "$here/session/swaync/style.css" "$root/etc/xdg/mate-wayland-desktop/swaync/style.css"
+install -Dm644 "$here/session/ksnip/ksnip.conf" "$root/etc/xdg/ksnip/ksnip.conf"
 install -Dm644 "$here/README.md" "$root/usr/share/doc/mate-wayland-desktop/README.md"
 
 mkdir -p "$root/DEBIAN"
@@ -48,8 +53,8 @@ Architecture: all
 Maintainer: MATE Wayland Desktop <build@mate-wayland-desktop.invalid>
 Section: x11
 Priority: optional
-Depends: labwc, xwayland, mate-panel (>= 1.29.2), mate-desktop (>= 1.29.1), caja (>= 1.29.1), mate-media (>= 1.29.0), mate-applets (>= 1.28.1), mate-settings-daemon, mate-polkit, mate-notification-daemon, mate-themes, mate-icon-theme, yaru-theme-icon, fonts-noto-core, gsettings-desktop-schemas, swaybg, swayidle, gtklock, grim, slurp, python3-gi, python3-gi-cairo, wlr-randr, gir1.2-gtk-3.0, gir1.2-gtklayershell-0.1, gir1.2-matedesktop-2.0, dbus-user-session
-Recommends: network-manager-applet, wdisplays, kanshi, libayatana-appindicator3-1, gir1.2-ayatanaappindicator3-0.1, mate-terminal, mate-control-center
+Depends: labwc, xwayland, mate-panel (>= 1.29.2), mate-desktop (>= 1.29.1), caja (>= 1.29.1), mate-media (>= 1.29.0), mate-applets (>= 1.28.1), mate-settings-daemon, mate-polkit, sway-notification-center, libnotify-bin, mate-themes, mate-icon-theme, yaru-theme-icon, fonts-noto-core, gsettings-desktop-schemas, swaybg, swayidle, gtklock, grim, slurp, wireplumber, python3-gi, python3-gi-cairo, wlr-randr, gir1.2-gtk-3.0, gir1.2-gtklayershell-0.1, gir1.2-matedesktop-2.0, dbus-user-session
+Recommends: ksnip, playerctl, network-manager-applet, wdisplays, kanshi, libayatana-appindicator3-1, gir1.2-ayatanaappindicator3-0.1, mate-terminal, mate-control-center
 Description: MATE desktop on Wayland, using the labwc compositor
  Session entry, labwc configuration, panel layout and a Log Out helper that
  together run the MATE desktop as a Wayland session.

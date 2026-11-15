@@ -10,6 +10,15 @@ gtklock
 grim
 slurp
 wl-clipboard
+# Notifications (replaces mate-notification-daemon, which is old and X11-only
+# in Ubuntu's version) and notify-send for the volume and brightness display
+sway-notification-center
+libnotify-bin
+# Screenshot editor opened by the Print key: arrows, numbered steps, blur
+ksnip
+qtwayland5
+# Media keys (play, pause, next)
+playerctl
 wdisplays
 kanshi
 xdg-desktop-portal
@@ -22,7 +31,6 @@ mate-indicator-applet
 mate-terminal
 mate-control-center
 mate-settings-daemon
-mate-notification-daemon
 mate-polkit
 mate-system-monitor
 mate-calc
@@ -90,6 +98,11 @@ virtualbox-guest-utils
 # pulls in the X server core, which the X11 half of the package needs).
 virtualbox-guest-x11
 wlr-randr
+
+# Video and audio decoding (H.264, AAC and others). Firefox uses the
+# system's FFmpeg library; without it many web videos have no sound or do
+# not play.
+libavcodec62
 
 # Web browser, from Mozilla's repository (iso/firefox/mozilla.sources)
 firefox

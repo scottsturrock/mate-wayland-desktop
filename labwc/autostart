@@ -35,6 +35,18 @@ if [ -x "$helper" ]; then
     sleep 1
 fi
 
+# Notifications. Started here, before anything can ask D-Bus to start a
+# notification service, so that this one answers. It reads our settings
+# and style when they are installed.
+if command -v swaync >/dev/null; then
+    swaync_dir=/etc/xdg/mate-wayland-desktop/swaync
+    if [ -f "$swaync_dir/config.json" ] && [ ! -e "${XDG_CONFIG_HOME:-$HOME/.config}/swaync" ]; then
+        start swaync swaync -c "$swaync_dir/config.json" -s "$swaync_dir/style.css"
+    else
+        start swaync swaync
+    fi
+fi
+
 # Panels, menus and applets.
 start mate-panel mate-panel
 

@@ -1,0 +1,73 @@
+#!/bin/sh
+# Volume, microphone and screen-brightness keys.
+#   mate-wayland-desktop-keys volume-up|volume-down|volume-mute|mic-mute|
+#                             brightness-up|brightness-down
+# On X11 mate-settings-daemon answers these keys; on Wayland only the
+# compositor sees them, so labwc's rc.xml calls this helper. It shows the
+# new level as a notification that replaces the previous one.
+
+osd() {  # icon, title, level (0-100, or empty for no bar)
+    command -v notify-send >/dev/null || return 0
+    if [ -n "$3" ]; then
+        notify-send -a "Keys" -t 1500 -i "$1" \
+            -h string:x-canonical-private-synchronous:mate-wayland-desktop-keys \
+            -h "int:value:$3" "$2"
+    else
+        notify-send -a "Keys" -t 1500 -i "$1" \
+            -h string:x-canonical-private-synchronous:mate-wayland-desktop-keys "$2"
+    fi
+}
+
+volume_osd() {
+    state=$(wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null) || exit 0
+    level=$(printf '%s\n' "$state" | awk '{printf "%d", $2 * 100 + 0.5}')
+    case $state in
+        *MUTED*) osd audio-volume-muted-symbolic "Volume: muted" "$level" ;;
+        *)
+            if [ "$level" -ge 67 ]; then icon=audio-volume-high-symbolic
+            elif [ "$level" -ge 34 ]; then icon=audio-volume-medium-symbolic
+            else icon=audio-volume-low-symbolic; fi
+            osd "$icon" "Volume: $level%" "$level" ;;
+    esac
+}
+
+brightness() {  # +1 or -1
+    for dir in /sys/class/backlight/*; do
+        [ -r "$dir/max_brightness" ] || continue
+        max=$(cat "$dir/max_brightness"); cur=$(cat "$dir/brightness")
+        step=$((max / 20)); [ "$step" -ge 1 ] || step=1
+        new=$((cur + $1 * step))
+        [ "$new" -le "$max" ] || new=$max
+        # Never fully dark: the lowest level stays one step above zero.
+        [ "$new" -ge "$step" ] || new=$step
+        # logind changes the brightness for the active session's user, so
+        # no root access or group membership is needed.
+        busctl call org.freedesktop.login1 /org/freedesktop/login1/session/auto \
+            org.freedesktop.login1.Session SetBrightness ssu \
+            backlight "$(basename "$dir")" "$new" >/dev/null 2>&1 || exit 0
+        osd display-brightness-symbolic "Brightness: $((new * 100 / max))%" "$((new * 100 / max))"
+        return
+    done
+}
+
+case ${1:-} in
+    volume-up)
+        wpctl set-mute @DEFAULT_AUDIO_SINK@ 0
+        wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@ 5%+
+        volume_osd ;;
+    volume-down)
+        wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-
+        volume_osd ;;
+    volume-mute)
+        wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle
+        volume_osd ;;
+    mic-mute)
+        wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle
+        case $(wpctl get-volume @DEFAULT_AUDIO_SOURCE@ 2>/dev/null) in
+            *MUTED*) osd microphone-sensitivity-muted-symbolic "Microphone: off" "" ;;
+            *) osd microphone-sensitivity-high-symbolic "Microphone: on" "" ;;
+        esac ;;
+    brightness-up) brightness 1 ;;
+    brightness-down) brightness -1 ;;
+    *) echo "usage: $0 volume-up|volume-down|volume-mute|mic-mute|brightness-up|brightness-down" >&2; exit 2 ;;
+esac

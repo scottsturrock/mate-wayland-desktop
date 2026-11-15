@@ -58,12 +58,72 @@
       <action name="SendToDesktop" to="right" wrap="no"/>
     </keybind>
 
-    <!-- Screenshots: whole screen, and Shift for a selected area -->
+    <!-- Screenshots. Print: select an area, then annotate it. Shift: the
+         whole desktop, then annotate. Ctrl: the whole desktop, saved at once. -->
     <keybind key="Print">
-      <action name="Execute" command="sh -c 'grim ~/Pictures/Screenshot-$(date +%F-%H%M%S).png'"/>
+      <action name="Execute" command="mate-wayland-desktop-screenshot area"/>
     </keybind>
     <keybind key="S-Print">
-      <action name="Execute" command="sh -c 'grim -g &quot;$(slurp)&quot; ~/Pictures/Screenshot-$(date +%F-%H%M%S).png'"/>
+      <action name="Execute" command="mate-wayland-desktop-screenshot screen"/>
+    </keybind>
+    <keybind key="C-Print">
+      <action name="Execute" command="mate-wayland-desktop-screenshot save"/>
+    </keybind>
+
+    <!-- Volume, microphone, brightness and media keys. On Wayland only the
+         compositor sees these keys, so they are bound here. -->
+    <keybind key="XF86AudioRaiseVolume">
+      <action name="Execute" command="mate-wayland-desktop-keys volume-up"/>
+    </keybind>
+    <keybind key="XF86AudioLowerVolume">
+      <action name="Execute" command="mate-wayland-desktop-keys volume-down"/>
+    </keybind>
+    <keybind key="XF86AudioMute">
+      <action name="Execute" command="mate-wayland-desktop-keys volume-mute"/>
+    </keybind>
+    <keybind key="XF86AudioMicMute">
+      <action name="Execute" command="mate-wayland-desktop-keys mic-mute"/>
+    </keybind>
+    <keybind key="XF86MonBrightnessUp">
+      <action name="Execute" command="mate-wayland-desktop-keys brightness-up"/>
+    </keybind>
+    <keybind key="XF86MonBrightnessDown">
+      <action name="Execute" command="mate-wayland-desktop-keys brightness-down"/>
+    </keybind>
+    <keybind key="XF86AudioPlay">
+      <action name="Execute" command="playerctl play-pause"/>
+    </keybind>
+    <keybind key="XF86AudioPause">
+      <action name="Execute" command="playerctl play-pause"/>
+    </keybind>
+    <keybind key="XF86AudioNext">
+      <action name="Execute" command="playerctl next"/>
+    </keybind>
+    <keybind key="XF86AudioPrev">
+      <action name="Execute" command="playerctl previous"/>
+    </keybind>
+    <keybind key="XF86AudioStop">
+      <action name="Execute" command="playerctl stop"/>
+    </keybind>
+
+    <!-- Other laptop keys -->
+    <keybind key="XF86Display">
+      <action name="Execute" command="wdisplays"/>
+    </keybind>
+    <keybind key="XF86Tools">
+      <action name="Execute" command="mate-control-center"/>
+    </keybind>
+    <keybind key="XF86Calculator">
+      <action name="Execute" command="mate-calc"/>
+    </keybind>
+    <keybind key="XF86Explorer">
+      <action name="Execute" command="caja"/>
+    </keybind>
+    <keybind key="XF86Search">
+      <action name="Execute" command="mate-panel --run-dialog"/>
+    </keybind>
+    <keybind key="XF86ScreenSaver">
+      <action name="Execute" command="gtklock"/>
     </keybind>
   </keyboard>
 

@@ -1,0 +1,28 @@
+#!/bin/sh
+# Screenshots.
+#   mate-wayland-desktop-screenshot area     select an area, then annotate
+#   mate-wayland-desktop-screenshot screen   the whole desktop, then annotate
+#   mate-wayland-desktop-screenshot save     the whole desktop, saved at once
+# grim and slurp take the picture, because they work on every screen layout
+# (several screens, different scales). The picture is saved in Pictures and
+# opened in ksnip, which has arrows, text, numbered steps, rectangles,
+# highlighting, blur and pixelate; saving there updates the same file.
+
+dir=$(xdg-user-dir PICTURES 2>/dev/null); [ -n "$dir" ] && [ "$dir" != "$HOME" ] || dir=$HOME/Pictures
+mkdir -p "$dir"
+file=$dir/Screenshot-$(date +%F-%H%M%S).png
+
+case ${1:-area} in
+    area)
+        area=$(slurp) || exit 0          # Esc cancels
+        grim -g "$area" "$file" || exit 1 ;;
+    screen|save)
+        grim "$file" || exit 1 ;;
+    *) echo "usage: $0 area|screen|save" >&2; exit 2 ;;
+esac
+
+if [ "${1:-area}" != save ] && command -v ksnip >/dev/null; then
+    exec ksnip -e "$file"
+fi
+command -v notify-send >/dev/null && notify-send -a "Screenshot" -t 4000 -i camera-photo \
+    "Screenshot saved" "$file"

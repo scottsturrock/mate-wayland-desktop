@@ -1,0 +1,17 @@
+/* MATE Wayland Desktop: the notification daemon's own style, with the
+   project's font and accent colour and a background that is not see-through. */
+@import url("file:///etc/xdg/swaync/style.css");
+
+:root {
+  --noti-bg: 43, 34, 46;
+  --noti-bg-alpha: 0.97;
+  --noti-bg-darker: rgb(34, 27, 37);
+  --noti-bg-hover: rgb(58, 46, 62);
+  --cc-bg: rgba(43, 34, 46, 0.97);
+  --bg-selected: rgb(233, 84, 32);
+  --notification-icon-size: 48px;
+  --font-size-body: 14px;
+  --font-size-summary: 15px;
+}
+
+* { font-family: "Noto Sans", sans-serif; }
