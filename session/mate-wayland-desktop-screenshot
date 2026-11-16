@@ -2,27 +2,39 @@
 # Screenshots.
 #   mate-wayland-desktop-screenshot area     select an area, then annotate
 #   mate-wayland-desktop-screenshot screen   the whole desktop, then annotate
-#   mate-wayland-desktop-screenshot save     the whole desktop, saved at once
+#   mate-wayland-desktop-screenshot save     the whole desktop, saved to a file
+#
 # grim and slurp take the picture, because they work on every screen layout
-# (several screens, different scales). The picture is saved in Pictures and
-# opened in ksnip, which has arrows, text, numbered steps, rectangles,
-# highlighting, blur and pixelate; saving there updates the same file.
+# (several screens, different scales). For "area" and "screen" the capture is
+# piped straight into satty to annotate (arrows, text, numbered steps, boxes,
+# highlight, blur, pixelate) -- NOTHING is written to disk. Press Enter or the
+# copy button and the result goes to the clipboard, then the window closes.
+# Only "save" writes a file (the whole desktop, no editor).
+#
+# GSK_RENDERER=gl: satty is a GTK4 app; its default Vulkan renderer prints
+# "VK_SUBOPTIMAL_KHR" warnings and can glitch on NVIDIA, so use the GL
+# renderer, which is steady across the GPUs we target.
 
-dir=$(xdg-user-dir PICTURES 2>/dev/null); [ -n "$dir" ] && [ "$dir" != "$HOME" ] || dir=$HOME/Pictures
-mkdir -p "$dir"
-file=$dir/Screenshot-$(date +%F-%H%M%S).png
+edit() {
+    # Read the capture on stdin, annotate, copy to clipboard, never save.
+    GSK_RENDERER=gl satty --filename - \
+        --copy-command wl-copy \
+        --actions-on-enter save-to-clipboard --actions-on-enter exit \
+        --early-exit copy
+}
 
 case ${1:-area} in
     area)
         area=$(slurp) || exit 0          # Esc cancels
-        grim -g "$area" "$file" || exit 1 ;;
-    screen|save)
-        grim "$file" || exit 1 ;;
+        grim -g "$area" - | edit ;;
+    screen)
+        grim - | edit ;;
+    save)
+        dir=$(xdg-user-dir PICTURES 2>/dev/null); [ -n "$dir" ] && [ "$dir" != "$HOME" ] || dir=$HOME/Pictures
+        mkdir -p "$dir"
+        file=$dir/Screenshot-$(date +%F-%H%M%S).png
+        grim "$file" || exit 1
+        command -v notify-send >/dev/null && notify-send -a "Screenshot" -t 4000 -i camera-photo \
+            "Screenshot saved" "$file" ;;
     *) echo "usage: $0 area|screen|save" >&2; exit 2 ;;
 esac
-
-if [ "${1:-area}" != save ] && command -v ksnip >/dev/null; then
-    exec ksnip -e "$file"
-fi
-command -v notify-send >/dev/null && notify-send -a "Screenshot" -t 4000 -i camera-photo \
-    "Screenshot saved" "$file"

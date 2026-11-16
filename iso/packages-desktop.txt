@@ -14,9 +14,12 @@ wl-clipboard
 # in Ubuntu's version) and notify-send for the volume and brightness display
 sway-notification-center
 libnotify-bin
-# Screenshot editor opened by the Print key: arrows, numbered steps, blur
-ksnip
-qtwayland5
+# GTK4 runtime for satty, the screenshot annotator the Print key opens
+# (arrows, numbered steps, highlight, blur, pixelate). satty is not in Ubuntu;
+# packaging/build-session-deb.sh fetches it and the session package depends on
+# these two.
+libgtk-4-1
+libadwaita-1-0
 # Media keys (play, pause, next)
 playerctl
 wdisplays

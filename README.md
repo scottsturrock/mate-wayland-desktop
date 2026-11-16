@@ -54,7 +54,7 @@ screens and scaling are at <https://mate-wayland.org/guides/>.
 | Display | Wayland, labwc 0.9 (wlroots); XWayland for X11-only programs |
 | Desktop | MATE 1.29: panel, Caja, Control Center, settings daemon, media; mate-applets 1.28 |
 | Login / installer | LightDM, Calamares 3.3 (LUKS2 option) |
-| Wayland tools | gtklock, swayidle, grim, wdisplays, kanshi, wlr-randr |
+| Wayland tools | gtklock, swayidle, grim, slurp, satty, wdisplays, kanshi, wlr-randr |
 | Browser | Firefox from Mozilla's APT repository |
 
 ## Build it

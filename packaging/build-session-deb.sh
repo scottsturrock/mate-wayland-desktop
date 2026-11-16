@@ -45,8 +45,21 @@ install -Dm755 "$here/session/mate-wayland-desktop-keys" "$root/usr/bin/mate-way
 install -Dm755 "$here/session/mate-wayland-desktop-screenshot" "$root/usr/bin/mate-wayland-desktop-screenshot"
 install -Dm644 "$here/session/swaync/config.json" "$root/etc/xdg/mate-wayland-desktop/swaync/config.json"
 install -Dm644 "$here/session/swaync/style.css" "$root/etc/xdg/mate-wayland-desktop/swaync/style.css"
-install -Dm644 "$here/session/ksnip/ksnip.conf" "$root/etc/xdg/ksnip/ksnip.conf"
 install -Dm644 "$here/README.md" "$root/usr/share/doc/mate-wayland-desktop/README.md"
+
+# satty: the Wayland screenshot annotator the Print key opens (blur, pixelate,
+# highlight, arrows, numbered steps). Not packaged by Ubuntu, so fetch the
+# pinned upstream release and verify its checksum before adding the binary.
+# amd64 only. MPL-2.0; source: https://github.com/Satty-org/Satty
+satty_ver=0.22.0
+satty_sha=eb7a028c4a5ce331c2f355add8e2b807a7d697fe4495f7e1965786a4f6bcd5b8
+satty_tgz=$(mktemp)
+curl -fsSL "https://github.com/Satty-org/Satty/releases/download/v${satty_ver}/satty-x86_64-unknown-linux-gnu.tar.gz" -o "$satty_tgz"
+echo "$satty_sha  $satty_tgz" | sha256sum -c - >/dev/null
+satty_dir=$(mktemp -d)
+tar -xzf "$satty_tgz" -C "$satty_dir"
+install -Dm755 "$(find "$satty_dir" -type f -name satty | head -1)" "$root/usr/bin/satty"
+rm -rf "$satty_tgz" "$satty_dir"
 
 mkdir -p "$root/DEBIAN"
 cat > "$root/DEBIAN/control" <<CONTROL
@@ -56,8 +69,8 @@ Architecture: all
 Maintainer: MATE Wayland Desktop <build@mate-wayland-desktop.invalid>
 Section: x11
 Priority: optional
-Depends: labwc, xwayland, mate-panel (>= 1.29.2), mate-desktop (>= 1.29.1), caja (>= 1.29.1), mate-media (>= 1.29.0), mate-applets (>= 1.28.1), mate-settings-daemon, mate-polkit, sway-notification-center, libnotify-bin, mate-themes, mate-icon-theme, yaru-theme-icon, fonts-noto-core, gsettings-desktop-schemas, swaybg, swayidle, gtklock, grim, slurp, wireplumber, python3-gi, python3-gi-cairo, wlr-randr, gir1.2-gtk-3.0, gir1.2-gtklayershell-0.1, gir1.2-matedesktop-2.0, dbus-user-session
-Recommends: ksnip, playerctl, network-manager-applet, wdisplays, kanshi, libayatana-appindicator3-1, gir1.2-ayatanaappindicator3-0.1, mate-terminal, mate-control-center
+Depends: labwc, xwayland, mate-panel (>= 1.29.2), mate-desktop (>= 1.29.1), caja (>= 1.29.1), mate-media (>= 1.29.0), mate-applets (>= 1.28.1), mate-settings-daemon, mate-polkit, sway-notification-center, libnotify-bin, mate-themes, mate-icon-theme, yaru-theme-icon, fonts-noto-core, gsettings-desktop-schemas, swaybg, swayidle, gtklock, grim, slurp, wl-clipboard, libgtk-4-1, libadwaita-1-0, wireplumber, python3-gi, python3-gi-cairo, wlr-randr, gir1.2-gtk-3.0, gir1.2-gtklayershell-0.1, gir1.2-matedesktop-2.0, dbus-user-session
+Recommends: playerctl, network-manager-applet, wdisplays, kanshi, libayatana-appindicator3-1, gir1.2-ayatanaappindicator3-0.1, mate-terminal, mate-control-center
 Description: MATE desktop on Wayland, using the labwc compositor
  Session entry, labwc configuration, panel layout and a Log Out helper that
  together run the MATE desktop as a Wayland session.

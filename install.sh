@@ -21,7 +21,7 @@ apt-get install -y \
     mate-themes mate-icon-theme yaru-theme-icon \
     gtklock swayidle swaybg python3-gi gir1.2-gtk-3.0 dbus-daemon \
     wdisplays kanshi \
-    grim slurp wl-clipboard
+    grim slurp wl-clipboard libgtk-4-1 libadwaita-1-0
 
 # Newer MATE components than Ubuntu ships, needed for Wayland support
 # (panel applets, desktop icons). Built by packaging/build-all.sh.
