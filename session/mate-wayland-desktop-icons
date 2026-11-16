@@ -60,4 +60,11 @@ for frame in 01 02 03 04 05 06 07 08 09 10 11 12 13 14; do
     copy "nm-vpn-connecting$frame" status/network-vpn-acquiring-symbolic
 done
 
+# Icons we draw ourselves, where Yaru has none in the shape wanted
+# (Blueman's panel icon: idle, connected, switched off).
+own=${4:-/usr/share/mate-wayland-desktop/icons-status}
+if [ -d "$own" ]; then
+    cp "$own"/*.svg "$out"/
+fi
+
 gtk-update-icon-cache -q -f "$theme" 2>/dev/null || true

@@ -42,6 +42,7 @@ pluma
 atril
 eom
 engrampa
+mpv
 
 # Login screen
 lightdm
@@ -54,6 +55,8 @@ pipewire-audio
 wireplumber
 pavucontrol
 network-manager-applet
+bluez
+blueman
 gvfs-backends
 gvfs-fuse
 udisks2

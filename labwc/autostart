@@ -78,6 +78,11 @@ if command -v nm-applet >/dev/null; then
     start nm-applet nm-applet --indicator
 fi
 
+# Bluetooth icon in the notification area, when Blueman is installed.
+if command -v blueman-applet >/dev/null; then
+    start blueman-applet blueman-applet
+fi
+
 # The desktop background on every monitor Caja does not cover.
 if command -v mate-wayland-desktop-wallpaper >/dev/null; then
     start wallpaper mate-wayland-desktop-wallpaper

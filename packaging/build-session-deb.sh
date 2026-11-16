@@ -21,6 +21,9 @@ for name in places/start-here places/start-here-symbolic places/distributor-logo
 done
 install -Dm644 "$here/icons/index.theme" "$root/usr/share/icons/mate-wayland-desktop/index.theme"
 install -Dm644 "$here/icons/aliases.conf" "$root/usr/share/mate-wayland-desktop/icon-aliases.conf"
+for icon in "$here"/icons/status/*.svg; do
+    install -Dm644 "$icon" "$root/usr/share/mate-wayland-desktop/icons-status/$(basename "$icon")"
+done
 install -Dm755 "$here/session/mate-wayland-desktop-panel-refresh" "$root/usr/bin/mate-wayland-desktop-panel-refresh"
 install -Dm644 "$here/session/gtklock/config.ini" "$root/etc/xdg/gtklock/config.ini"
 install -Dm644 "$here/session/gtklock/style.css" "$root/etc/xdg/gtklock/style.css"
