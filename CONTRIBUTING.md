@@ -6,7 +6,7 @@ hardware are the most useful thing you can give the project.
 ## Reporting a problem
 
 Open an issue at
-<https://github.com/mate-wayland/mate-wayland-desktop/issues> and include:
+<https://github.com/scottsturrock/mate-wayland-desktop/issues> and include:
 
 - the name of the ISO file you installed from (it contains the build date);
 - the computer: make and model, graphics card, and whether it is a virtual

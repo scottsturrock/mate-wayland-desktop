@@ -1,0 +1,15 @@
+Sources of the MATE packages this project rebuilds.
+
+For each package in packaging/packages.conf:
+
+  <name>_<version>.orig.tar.xz     the upstream release
+  <name>_<version>.debian.tar.xz   Ubuntu's packaging
+  <name>_<version>.dsc             Ubuntu's description of that source
+
+Our changes are applied on top of these by packaging/<name>/adjust.sh and
+packaging/<name>/patches/. Every other package in the ISO is unmodified
+from Ubuntu or from Mozilla's repository (Firefox); its source is
+published there.
+
+Each release is tagged in this repository, so the tag holds the complete
+source of our work for that ISO.

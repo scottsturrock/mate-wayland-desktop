@@ -4,5 +4,5 @@ contact_links:
     url: https://mate-wayland.org/guides/
     about: NVIDIA graphics, screens and scaling
   - name: Security problem
-    url: https://github.com/mate-wayland/mate-wayland-desktop/security/advisories/new
+    url: https://github.com/scottsturrock/mate-wayland-desktop/security/advisories/new
     about: Report a vulnerability privately

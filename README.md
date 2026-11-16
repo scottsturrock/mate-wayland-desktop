@@ -147,7 +147,7 @@ difference from stock Ubuntu and MATE, and why.
 ## Reporting problems and contributing
 
 Problems and suggestions:
-<https://github.com/mate-wayland/mate-wayland-desktop/issues>. How to
+<https://github.com/scottsturrock/mate-wayland-desktop/issues>. How to
 report, build and send changes is in `CONTRIBUTING.md`; security problems
 are reported privately, see `SECURITY.md`.
 
