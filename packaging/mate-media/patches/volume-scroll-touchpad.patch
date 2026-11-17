@@ -1,0 +1,83 @@
+--- a/mate-volume-control/gvc-applet.c
++++ b/mate-volume-control/gvc-applet.c
+@@ -1203,8 +1203,8 @@
+         update_track_label (applet);
+ 
+         /* Enable 'scroll-event' signal to be received  */
+-        gtk_widget_add_events (GTK_WIDGET(applet->priv->icon_input), GDK_SCROLL_MASK);
+-        gtk_widget_add_events (GTK_WIDGET(applet->priv->icon_output), GDK_SCROLL_MASK);
++        gtk_widget_add_events (GTK_WIDGET(applet->priv->icon_input), GDK_SCROLL_MASK | GDK_SMOOTH_SCROLL_MASK);
++        gtk_widget_add_events (GTK_WIDGET(applet->priv->icon_output), GDK_SCROLL_MASK | GDK_SMOOTH_SCROLL_MASK);
+ 
+         /* Update icons on size/orientation changes*/
+         g_object_connect (applet->priv->applet,
+--- a/mate-volume-control/gvc-stream-applet-icon.c
++++ b/mate-volume-control/gvc-stream-applet-icon.c
+@@ -66,6 +66,8 @@
+         MatePanelAppletOrient   orient;
+         guint                   size;
+         guint                   scroll_feedback_id;
++        gdouble                 smooth_scroll;
++        guint32                 wheel_time;
+ #if defined(ENABLE_WAYLAND)
+         GList                  *click_catchers;
+ #endif
+@@ -752,11 +754,58 @@
+         return handled;
+ }
+ 
++/* A touchpad sends no wheel clicks, only smooth scroll events: a stream of
++ * small distances. Add them up and return one volume step for each whole unit
++ * travelled. A mouse wheel may send a smooth event as well as its click; the
++ * click is the one that counts. */
++static gboolean
++smooth_scroll_volume (GvcStreamAppletIcon *icon,
++                      GdkEventScroll      *event)
++{
++        GdkDevice *device;
++        gdouble    dx = 0.0;
++        gdouble    dy = 0.0;
++        gboolean   handled = FALSE;
++
++        if (gdk_event_is_scroll_stop_event ((GdkEvent *) event)) {
++                icon->priv->smooth_scroll = 0.0;
++                return TRUE;
++        }
++        if (event->time == icon->priv->wheel_time)
++                return TRUE;
++        if (!gdk_event_get_scroll_deltas ((GdkEvent *) event, &dx, &dy) || dy == 0.0)
++                return FALSE;
++
++        device = gdk_event_get_source_device ((GdkEvent *) event);
++        if (device != NULL && gdk_device_get_source (device) == GDK_SOURCE_MOUSE) {
++                /* A wheel whose click was not delivered: one step a notch. */
++                return scroll_volume (icon, dy < 0.0 ? GDK_SCROLL_UP : GDK_SCROLL_DOWN);
++        }
++
++        if ((dy < 0.0) != (icon->priv->smooth_scroll < 0.0))
++                icon->priv->smooth_scroll = 0.0;
++        icon->priv->smooth_scroll += dy;
++
++        while (icon->priv->smooth_scroll <= -1.0) {
++                icon->priv->smooth_scroll += 1.0;
++                handled |= scroll_volume (icon, GDK_SCROLL_UP);
++        }
++        while (icon->priv->smooth_scroll >= 1.0) {
++                icon->priv->smooth_scroll -= 1.0;
++                handled |= scroll_volume (icon, GDK_SCROLL_DOWN);
++        }
++        return handled;
++}
++
+ static gboolean
+ on_applet_icon_scroll_event (GtkWidget           *event_box,
+                              GdkEventScroll      *event,
+                              GvcStreamAppletIcon *icon)
+ {
++        if (event->direction == GDK_SCROLL_SMOOTH)
++                return smooth_scroll_volume (icon, event);
++        icon->priv->wheel_time = event->time;
++
+         if (icon->priv->player != NULL) {
+                 if (icon->priv->applet_settings != NULL &&
+                     !g_settings_get_boolean (icon->priv->applet_settings, "horizontal-scroll-controls"))

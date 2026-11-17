@@ -47,12 +47,15 @@ install -Dm644 "$here/session/swaync/config.json" "$root/etc/xdg/mate-wayland-de
 install -Dm644 "$here/session/swaync/style.css" "$root/etc/xdg/mate-wayland-desktop/swaync/style.css"
 install -Dm644 "$here/README.md" "$root/usr/share/doc/mate-wayland-desktop/README.md"
 
-# HiDPI launcher: runs an X11 program in its own high-resolution Xwayland
-# window so it is sharp on a scaled screen. Three scripts, a menu entry, the
-# picker's settings, and a small library preloaded into that Xwayland so the
-# window carries the program's own name and icon. The library is compiled
-# here: amd64 only, like satty below.
-for f in hidpi-run hidpi-menu hidpi-desktop; do
+# HiDPI launcher: makes a program that is blurry on a scaled screen sharp,
+# either in its own high-resolution Xwayland window or as a normal Wayland
+# window, and remembers which. Four scripts, a menu entry, the picker's
+# settings, and two small libraries: one preloaded into that Xwayland so the
+# window carries the program's own name and icon, one preloaded into a
+# program run as a Wayland window so it stays on Wayland and keeps its window
+# size requests valid. The libraries are compiled here: amd64 only, like
+# satty below.
+for f in hidpi-run hidpi-menu hidpi-desktop hidpi-fix; do
     install -Dm755 "$here/session/hidpi/$f" "$root/usr/bin/$f"
 done
 install -Dm644 "$here/session/hidpi/hidpi-launcher.desktop" "$root/usr/share/applications/hidpi-launcher.desktop"
@@ -61,7 +64,10 @@ command -v cc >/dev/null || { echo "build-session-deb: a C compiler (cc) is need
 mkdir -p "$root/usr/lib/mate-wayland-desktop"
 cc -shared -fPIC -O2 -Wall -o "$root/usr/lib/mate-wayland-desktop/hidpi-xwl-shim.so" \
     "$here/session/hidpi/hidpi-xwl-shim.c" -ldl
-chmod 644 "$root/usr/lib/mate-wayland-desktop/hidpi-xwl-shim.so"
+cc -shared -fPIC -O2 -Wall -o "$root/usr/lib/mate-wayland-desktop/hidpi-wl-shim.so" \
+    "$here/session/hidpi/hidpi-wl-shim.c" -ldl
+chmod 644 "$root/usr/lib/mate-wayland-desktop/hidpi-xwl-shim.so" \
+    "$root/usr/lib/mate-wayland-desktop/hidpi-wl-shim.so"
 
 # satty: the Wayland screenshot annotator the Print key opens (blur, pixelate,
 # highlight, arrows, numbered steps). Not packaged by Ubuntu, so fetch the
@@ -85,7 +91,7 @@ Architecture: all
 Maintainer: MATE Wayland Desktop <build@mate-wayland-desktop.invalid>
 Section: x11
 Priority: optional
-Depends: labwc, xwayland, mate-panel (>= 1.29.2), mate-desktop (>= 1.29.1), caja (>= 1.29.1), mate-media (>= 1.29.0), mate-applets (>= 1.28.1), mate-settings-daemon, mate-polkit, sway-notification-center, libnotify-bin, mate-themes, mate-icon-theme, yaru-theme-icon, fonts-noto-core, gsettings-desktop-schemas, swaybg, swayidle, gtklock, grim, slurp, wl-clipboard, libgtk-4-1, libadwaita-1-0, xdotool, xclip, x11-utils, fuzzel, libdecor-0-0, wireplumber, python3-gi, python3-gi-cairo, wlr-randr, gir1.2-gtk-3.0, gir1.2-gtklayershell-0.1, gir1.2-matedesktop-2.0, dbus-user-session
+Depends: labwc, xwayland, mate-panel (>= 1.29.2), mate-desktop (>= 1.29.1), caja (>= 1.29.1), mate-media (>= 1.29.0), mate-applets (>= 1.28.1), mate-settings-daemon, mate-polkit, sway-notification-center, libnotify-bin, mate-themes, mate-icon-theme, yaru-theme-icon, fonts-noto-core, gsettings-desktop-schemas, swaybg, swayidle, gtklock, grim, slurp, wl-clipboard, libgtk-4-1, libadwaita-1-0, xdotool, xclip, x11-utils, fuzzel, zenity, libdecor-0-0, wireplumber, python3-gi, python3-gi-cairo, wlr-randr, gir1.2-gtk-3.0, gir1.2-gtklayershell-0.1, gir1.2-matedesktop-2.0, dbus-user-session
 Recommends: zenity, libdecor-0-plugin-1-gtk, playerctl, network-manager-applet, wdisplays, kanshi, libayatana-appindicator3-1, gir1.2-ayatanaappindicator3-0.1, mate-terminal, mate-control-center
 Description: MATE desktop on Wayland, using the labwc compositor
  Session entry, labwc configuration, panel layout and a Log Out helper that

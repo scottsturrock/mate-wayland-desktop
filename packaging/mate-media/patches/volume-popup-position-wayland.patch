@@ -1,0 +1,52 @@
+--- a/mate-volume-control/gvc-stream-applet-icon.c
++++ b/mate-volume-control/gvc-stream-applet-icon.c
+@@ -241,7 +241,12 @@
+             GtkWidget *toplevel;
+             toplevel = gtk_widget_get_toplevel (GTK_WIDGET (icon));
+ 
+-            /* Layer-shell margins are relative to the selected monitor. */
++            /* Layer-shell margins are relative to the selected monitor. On
++             * Wayland gdk_window_get_origin() is relative to the panel's own
++             * surface, which starts at that monitor's corner, so the icon's
++             * position is used as it is: subtracting the monitor's position
++             * in the global layout put the dock at the wrong place on every
++             * monitor that is not at the layout's origin. */
+             gtk_layer_set_monitor (GTK_WINDOW (icon->priv->dock), monitor_num);
+ 
+             top = bottom = left = right = FALSE;
+@@ -295,7 +300,7 @@
+                 gtk_layer_set_anchor (GTK_WINDOW (icon->priv->dock), GTK_LAYER_SHELL_EDGE_BOTTOM, FALSE);
+                 gtk_layer_set_anchor (GTK_WINDOW (icon->priv->dock), GTK_LAYER_SHELL_EDGE_RIGHT, FALSE);
+                 gtk_layer_set_margin (GTK_WINDOW (icon->priv->dock), GTK_LAYER_SHELL_EDGE_LEFT,
+-                                      CLAMP (allocation.x - monitor.x, 0,
++                                      CLAMP (allocation.x, 0,
+                                              MAX (0, monitor.width - dock_req.width)));
+                 gtk_layer_set_margin (GTK_WINDOW (icon->priv->dock), GTK_LAYER_SHELL_EDGE_TOP, 0);
+             }
+@@ -308,7 +313,7 @@
+                 gtk_layer_set_anchor (GTK_WINDOW (icon->priv->dock), GTK_LAYER_SHELL_EDGE_TOP, FALSE);
+                 gtk_layer_set_anchor (GTK_WINDOW (icon->priv->dock), GTK_LAYER_SHELL_EDGE_RIGHT, FALSE);
+                 gtk_layer_set_margin (GTK_WINDOW (icon->priv->dock), GTK_LAYER_SHELL_EDGE_LEFT,
+-                                      CLAMP (allocation.x - monitor.x, 0,
++                                      CLAMP (allocation.x, 0,
+                                              MAX (0, monitor.width - dock_req.width)));
+                 gtk_layer_set_margin (GTK_WINDOW (icon->priv->dock), GTK_LAYER_SHELL_EDGE_TOP, 0);
+             }
+@@ -321,7 +326,7 @@
+                 gtk_layer_set_anchor (GTK_WINDOW (icon->priv->dock), GTK_LAYER_SHELL_EDGE_RIGHT, FALSE);
+                 gtk_layer_set_anchor (GTK_WINDOW (icon->priv->dock), GTK_LAYER_SHELL_EDGE_BOTTOM, FALSE);
+                 gtk_layer_set_margin (GTK_WINDOW (icon->priv->dock), GTK_LAYER_SHELL_EDGE_TOP,
+-                                      CLAMP (allocation.y - monitor.y, 0,
++                                      CLAMP (allocation.y, 0,
+                                              MAX (0, monitor.height - dock_req.height)));
+                 gtk_layer_set_margin (GTK_WINDOW (icon->priv->dock), GTK_LAYER_SHELL_EDGE_LEFT, 0);
+             }
+@@ -334,7 +339,7 @@
+                 gtk_layer_set_anchor (GTK_WINDOW (icon->priv->dock), GTK_LAYER_SHELL_EDGE_LEFT, FALSE);
+                 gtk_layer_set_anchor (GTK_WINDOW (icon->priv->dock), GTK_LAYER_SHELL_EDGE_BOTTOM, FALSE);
+                 gtk_layer_set_margin (GTK_WINDOW (icon->priv->dock), GTK_LAYER_SHELL_EDGE_TOP,
+-                                      CLAMP (allocation.y - monitor.y, 0,
++                                      CLAMP (allocation.y, 0,
+                                              MAX (0, monitor.height - dock_req.height)));
+                 gtk_layer_set_margin (GTK_WINDOW (icon->priv->dock), GTK_LAYER_SHELL_EDGE_LEFT, 0);
+             }

@@ -1,0 +1,69 @@
+--- a/applets/notification_area/status-notifier/sn-item-v0.c
++++ b/applets/notification_area/status-notifier/sn-item-v0.c
+@@ -155,11 +155,17 @@
+     return p1->width - p2->width;
+ }
+ 
++/* size is in logical pixels. On a scaled output the surface is made at
++ * size * scale device pixels and marked with that scale, so an item that
++ * sends a large enough pixmap is drawn with real detail instead of being
++ * reduced to the logical size and then enlarged by the output scale. */
+ static cairo_surface_t *
+ get_surface (SnIconPixmap  **icon_pixmap,
+              GtkOrientation  orientation,
+-             gint            size)
++             gint            size,
++             gint            scale)
+ {
++  gint logical_size = size;
+   gint i;
+   GList *pixmaps = NULL;
+   SnIconPixmap *pixmap = NULL;
+@@ -167,6 +173,9 @@
+ 
+   g_assert (icon_pixmap != NULL && icon_pixmap[0] != NULL);
+ 
++  scale = MAX (1, scale);
++  size = logical_size * scale;
++
+   for (i = 0; icon_pixmap[i] != NULL; i++)
+     pixmaps = g_list_prepend (pixmaps, icon_pixmap[i]);
+ 
+@@ -180,6 +189,10 @@
+ 
+       if (p->height > size && p->width > size)
+         {
++          /* On a scaled output, reducing the next larger pixmap keeps its
++           * detail; enlarging a smaller one cannot add any. */
++          if (scale > 1 && (pixmap->height < size || pixmap->width < size))
++            pixmap = p;
+           break;
+         }
+       pixmap = p;
+@@ -189,6 +202,16 @@
+ 
+   if (pixmap == NULL || pixmap->surface == NULL)
+     return NULL;
++  else if (scale > 1)
++    {
++      cairo_surface_t *scaled;
++
++      /* Always a surface of our own here: the device scale must not be set
++       * on the item's pixmap, which is shared. */
++      scaled = scale_surface (pixmap, orientation, size);
++      cairo_surface_set_device_scale (scaled, scale, scale);
++      return scaled;
++    }
+   else if (pixmap->height > size || pixmap->width > size)
+     return scale_surface (pixmap, orientation, size);
+   else
+@@ -312,7 +335,8 @@
+ 
+       surface = get_surface (icon_pixmap,
+                              gtk_orientable_get_orientation (GTK_ORIENTABLE (v0)),
+-                             icon_size);
++                             icon_size,
++                             gtk_widget_get_scale_factor (GTK_WIDGET (image)));
+       if (surface != NULL)
+         {
+           gtk_image_set_from_surface (image, surface);

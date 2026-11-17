@@ -1,0 +1,353 @@
+#!/bin/sh
+# hidpi-fix -- make a blurry program sharp and remember how. Part of MATE
+# Wayland Desktop.
+#
+# There are two ways to run a program sharp on a scaled screen (see
+# hidpi-run): as a normal Wayland window (--native), or inside an Xwayland
+# window of its own. Which one works depends on the program, so this tries
+# them in turn, asks "Is it sharp now?" after each, and on "Yes, keep it"
+# makes the program's ordinary menu entry start it that way from then on.
+#
+# Nothing of the program's own is changed. The fix is a copy of its menu entry
+# in ~/.local/share/applications (and of its start-at-login entry, if it has
+# one) whose command goes through hidpi-run. hidpi-run is told to fall back to
+# the ordinary command if the program fails to start, so a kept fix cannot
+# stop a program from opening. Picking the program again offers to remove
+# the fix.
+#
+# Usage:
+#   hidpi-fix NAME                  NAME = installed app name or a .desktop path
+#   hidpi-fix -- CMD [args...]      the form hidpi-menu uses
+#   hidpi-fix --list                show the programs that have a fix
+#   hidpi-fix --remove NAME         remove a fix, restoring the ordinary entry
+#   hidpi-fix --keep native|window NAME
+#                                   keep a way without the questions
+set -u
+
+DATA="${XDG_DATA_HOME:-$HOME/.local/share}"
+STATE="$DATA/mate-wayland-desktop/hidpi-fix"
+USERAPPS="$DATA/applications"
+USERAUTO="${XDG_CONFIG_HOME:-$HOME/.config}/autostart"
+TITLE="HiDPI Launcher"
+
+HR="$(dirname "$0")/hidpi-run"
+[ -x "$HR" ] || HR=$(command -v hidpi-run) || { echo "hidpi-fix: hidpi-run not found." >&2; exit 1; }
+case "$HR" in /*) ;; *) HR="$(cd "$(dirname "$HR")" && pwd)/$(basename "$HR")" ;; esac
+
+# ---- finding things ---------------------------------------------------------
+appdirs() {
+    printf '%s\n' "$USERAPPS"
+    printf '%s\n' "${XDG_DATA_DIRS:-/usr/local/share:/usr/share}" | tr ':' '\n' \
+        | sed 's|/*$|/applications|'
+}
+
+find_desktop() {      # $1 = path, desktop file id or app name -> prints the path
+    [ -f "$1" ] && { printf '%s\n' "$1"; return 0; }
+    appdirs | while read -r d; do
+        for f in "$d/$1" "$d/$1.desktop"; do
+            [ -f "$f" ] && { printf '%s\n' "$f"; exit 0; }
+        done
+    done
+}
+
+field() { grep -m1 "^$2=" "$1" | cut -d= -f2-; }      # $1 = file, $2 = key
+
+desktop_exec() {      # the first Exec= without its %-field codes
+    field "$1" Exec | sed -E 's/%[fFuUdDnNickvm]//g; s/  +/ /g; s/[[:space:]]+$//'
+}
+
+desktop_for_cmd() {   # $1 = command line -> the .desktop that runs it
+    appdirs | while read -r d; do
+        for f in "$d"/*.desktop; do
+            [ -f "$f" ] || continue
+            [ "$(desktop_exec "$f")" = "$1" ] && { printf '%s\n' "$f"; exit 0; }
+        done
+    done | head -n 1
+}
+
+cmd_program() {       # $1 = command line -> name of the program it starts
+    # shellcheck disable=SC2086
+    set -- $1
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            env|*/env|-*|*=*) shift ;;
+            *) basename "$1"; return ;;
+        esac
+    done
+}
+
+# The command an entry had before a fix wrapped it.
+unwrapped() { sed -E 's|^.*/hidpi-run( --native)?( --fallback)? -- ||'; }
+
+# ---- dialogs ----------------------------------------------------------------
+have_gui() { command -v zenity >/dev/null 2>&1; }
+
+say() {               # an information box, or a line on the terminal
+    if have_gui; then zenity --info --title="$TITLE" --no-wrap --text="$1" 2>/dev/null
+    else printf '%s\n' "$1"; fi
+}
+
+# ask TEXT YES-LABEL NO-LABEL [THIRD-LABEL] -> prints yes, no or third
+ask() {
+    if [ $# -ge 4 ]; then
+        out=$(zenity --question --title="$TITLE" --no-wrap --text="$1" \
+                --ok-label="$2" --cancel-label="$3" --extra-button="$4" 2>/dev/null)
+    else
+        out=$(zenity --question --title="$TITLE" --no-wrap --text="$1" \
+                --ok-label="$2" --cancel-label="$3" 2>/dev/null)
+    fi
+    rc=$?
+    if [ "$rc" -eq 0 ]; then echo yes
+    elif [ $# -ge 4 ] && [ "$out" = "$4" ]; then echo third
+    else echo no; fi
+}
+
+# ---- writing and removing a fix ---------------------------------------------
+wrap() {              # $1 = .desktop to rewrite in place, $2 = native|window
+    opt=""
+    [ "$2" = native ] && opt=" --native"
+    tmp=$(mktemp)
+    awk -v pre="$HR$opt --fallback -- " -v way="$2" '
+        /^Exec=/            { print "Exec=" pre substr($0, 6); next }
+        /^DBusActivatable=/ { print "DBusActivatable=false"; next }
+        /^X-HiDPI-Fix=/     { next }
+                            { print }
+        /^\[Desktop Entry\]/ { print "X-HiDPI-Fix=" way }
+    ' "$1" > "$tmp" && cat "$tmp" > "$1"
+    rm -f "$tmp"
+}
+
+refresh() {
+    command -v update-desktop-database >/dev/null 2>&1 \
+        && update-desktop-database "$USERAPPS" 2>/dev/null
+    return 0
+}
+
+keep_fix() {          # $1 = id (file name), $2 = source .desktop, $3 = native|window
+    id=$1; src=$2; way=$3
+    mkdir -p "$STATE" "$USERAPPS"
+    dest="$USERAPPS/$id"
+    prog=$(cmd_program "$(desktop_exec "$src" | unwrapped)")
+    {
+        echo "way=$way"
+        echo "name=$(field "$src" Name)"
+        if [ "$src" -ef "$dest" ]; then
+            cp -p "$dest" "$STATE/$id.orig"         # the user's own entry: keep a copy
+            echo "entry=restore"
+        else
+            cp "$src" "$dest"
+            echo "entry=delete"
+        fi
+        wrap "$dest" "$way"
+
+        # Start-at-login entries for the same program get the same treatment.
+        seen=" "
+        for d in "$USERAUTO" /etc/xdg/autostart; do
+            for f in "$d"/*.desktop; do
+                [ -f "$f" ] || continue
+                b=$(basename "$f")
+                case "$seen" in *" $b "*) continue ;; esac
+                [ "$b" = "$id" ] || [ "$(cmd_program "$(desktop_exec "$f")")" = "$prog" ] || continue
+                grep -q '^X-HiDPI-Fix=' "$f" && continue
+                seen="$seen$b "
+                mkdir -p "$USERAUTO"
+                if [ "$d" = "$USERAUTO" ]; then
+                    cp -p "$f" "$STATE/$id.autostart.$b.orig"
+                    echo "autostart=restore $b"
+                else
+                    cp "$f" "$USERAUTO/$b"
+                    echo "autostart=delete $b"
+                fi
+                wrap "$USERAUTO/$b" "$way"
+            done
+        done
+    } > "$STATE/$id.state.new"
+    mv "$STATE/$id.state.new" "$STATE/$id.state"
+    refresh
+}
+
+remove_fix() {        # $1 = id
+    id=$1
+    [ -f "$STATE/$id.state" ] || return 1
+    while IFS='=' read -r key value; do
+        case "$key" in
+            entry)
+                if [ "$value" = restore ] && [ -f "$STATE/$id.orig" ]; then
+                    mv "$STATE/$id.orig" "$USERAPPS/$id"
+                else
+                    rm -f "$USERAPPS/$id"
+                fi ;;
+            autostart)
+                how=${value%% *}; b=${value#* }
+                if [ "$how" = restore ] && [ -f "$STATE/$id.autostart.$b.orig" ]; then
+                    mv "$STATE/$id.autostart.$b.orig" "$USERAUTO/$b"
+                else
+                    rm -f "$USERAUTO/$b"
+                fi ;;
+        esac
+    done < "$STATE/$id.state"
+    rm -f "$STATE/$id.state"
+    refresh
+    return 0
+}
+
+way_words() {
+    if [ "$1" = native ]; then echo "as a normal Wayland window"
+    else echo "in a high-resolution window of its own"; fi
+}
+
+# ---- command-line forms that ask nothing ------------------------------------
+case "${1:-}" in
+    -h|--help) sed -n '2,25p' "$0"; exit 0 ;;
+    --list)
+        found=""
+        for s in "$STATE"/*.state; do
+            [ -f "$s" ] || continue
+            found=1
+            id=$(basename "$s" .state)
+            printf '%s\t%s\t%s\n' "$id" "$(field "$s" way)" "$(field "$s" name)"
+        done
+        [ -n "$found" ] || echo "No program has a HiDPI fix."
+        exit 0 ;;
+    --remove)
+        [ $# -ge 2 ] || { echo "hidpi-fix: --remove needs an app name." >&2; exit 2; }
+        id="$(basename "$2" .desktop).desktop"
+        remove_fix "$id" || { echo "hidpi-fix: '$2' has no HiDPI fix." >&2; exit 1; }
+        echo "Removed the HiDPI fix for $id."
+        exit 0 ;;
+    --keep)
+        [ $# -ge 3 ] || { echo "hidpi-fix: --keep native|window NAME" >&2; exit 2; }
+        case "$2" in native|window) ;; *) echo "hidpi-fix: --keep native|window NAME" >&2; exit 2 ;; esac
+        src=$(find_desktop "$3")
+        [ -n "$src" ] || { echo "hidpi-fix: app not found: $3" >&2; exit 1; }
+        id=$(basename "$src")
+        [ -f "$STATE/$id.state" ] && { echo "hidpi-fix: $id already has a fix; remove it first." >&2; exit 1; }
+        keep_fix "$id" "$src" "$2"
+        echo "$id now starts $(way_words "$2")."
+        exit 0 ;;
+esac
+
+# ---- which program? ---------------------------------------------------------
+SRC=""
+if [ "${1:-}" = "--" ]; then
+    shift
+    [ $# -gt 0 ] || { echo "hidpi-fix: no command after --." >&2; exit 2; }
+    # fuzzel names the entry that was picked; otherwise match the command
+    [ -n "${FUZZEL_DESKTOP_FILE_ID:-}" ] && SRC=$(find_desktop "$FUZZEL_DESKTOP_FILE_ID")
+    [ -n "$SRC" ] || SRC=$(desktop_for_cmd "$(printf '%s' "$*" | unwrapped)")
+    # a bare command with no menu entry: there is nothing to remember, run it
+    [ -n "$SRC" ] || exec "$HR" -- "$@"
+elif [ $# -eq 1 ]; then
+    SRC=$(find_desktop "$1")
+    [ -n "$SRC" ] || { echo "hidpi-fix: app not found: $1" >&2; exit 1; }
+else
+    sed -n '18,25p' "$0" >&2; exit 2
+fi
+
+ID=$(basename "$SRC")
+NAME=$(field "$SRC" Name); [ -n "$NAME" ] || NAME=$(basename "$ID" .desktop)
+NAME=$(printf '%s' "$NAME" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')    # shown as markup
+PROG=$(cmd_program "$(desktop_exec "$SRC" | unwrapped)")
+
+# The launcher's own entries, and "<Name> (HiDPI)" entries made by
+# hidpi-desktop, already are what they are: just run them.
+case "$PROG" in hidpi-menu|hidpi-fix|hidpi-desktop) exit 0 ;; esac
+case "$ID" in *-hidpi.desktop) exec sh -c "$(desktop_exec "$SRC")" ;; esac
+
+have_gui || { echo "hidpi-fix: zenity is needed for the questions (or use --keep)." >&2; exit 1; }
+
+# ---- already fixed: offer to undo -------------------------------------------
+if [ -f "$STATE/$ID.state" ]; then
+    way=$(field "$STATE/$ID.state" way)
+    answer=$(ask "<b>$NAME</b> already has a HiDPI fix: it starts $(way_words "$way").
+
+Removing the fix makes it start the ordinary way again." \
+        "Remove the fix" "Leave it" "Remove and try again")
+    case "$answer" in
+        no) exit 0 ;;
+        yes) remove_fix "$ID"; say "<b>$NAME</b> starts the ordinary way again."; exit 0 ;;
+    esac
+    remove_fix "$ID"
+    SRC=$(find_desktop "$ID")
+    [ -n "$SRC" ] || { say "The menu entry of <b>$NAME</b> is gone."; exit 1; }
+fi
+
+# ---- it must not be running already -----------------------------------------
+# A second copy of most programs only wakes the first one, which would still
+# be the blurry one.
+running() { pgrep -u "$(id -u)" -x "$(printf '%.15s' "$PROG")" >/dev/null 2>&1; }
+if [ -n "$PROG" ] && running; then
+    answer=$(ask "<b>$NAME</b> is running. To try the fix it has to be closed and started again.
+
+Save anything open in it first." "Close it and continue" "Cancel")
+    [ "$answer" = yes ] || exit 0
+    pkill -TERM -u "$(id -u)" -x "$(printf '%.15s' "$PROG")" 2>/dev/null
+    i=0
+    while running; do
+        i=$((i + 1))
+        [ "$i" -gt 40 ] && { say "<b>$NAME</b> did not close. Close it yourself and try again."; exit 1; }
+        sleep 0.25
+    done
+fi
+
+# ---- try each way, ask, keep ------------------------------------------------
+TEST=""
+stop_test() {
+    [ -n "$TEST" ] || return 0
+    kill -TERM -- "-$TEST" 2>/dev/null || kill -TERM "$TEST" 2>/dev/null
+    TEST=""
+    sleep 1
+}
+trap 'stop_test; exit 1' INT TERM HUP
+
+for way in native window; do
+    if [ "$way" = native ]; then
+        setsid "$HR" --native "$SRC" >/dev/null 2>&1 &
+    else
+        setsid "$HR" "$SRC" >/dev/null 2>&1 &
+    fi
+    TEST=$!
+
+    # Give it a few seconds: one that cannot run this way usually fails at once.
+    early=""
+    i=0
+    while [ "$i" -lt 30 ]; do
+        if ! kill -0 "$TEST" 2>/dev/null; then
+            wait "$TEST"; early=$?
+            break
+        fi
+        i=$((i + 1)); sleep 0.2
+    done
+    if [ -n "$early" ] && [ "$early" -ne 0 ]; then
+        TEST=""
+        continue                    # failed to start: no question, next way
+    fi
+
+    if [ "$way" = native ]; then no_label="No, try another way"; else no_label="No"; fi
+    answer=$(ask "<b>$NAME</b> has been started $(way_words "$way").
+
+Is it sharp now?" "Yes, keep it" "$no_label" "Cancel")
+
+    case "$answer" in
+        yes)
+            # It ran when the question went up and has since died: not a fix.
+            if [ -z "$early" ] && ! kill -0 "$TEST" 2>/dev/null; then
+                TEST=""
+                say "<b>$NAME</b> has stopped, so this way was not kept."
+                continue
+            fi
+            keep_fix "$ID" "$SRC" "$way"
+            say "<b>$NAME</b> will start this way from now on, from the menu as usual.
+
+If it ever fails to start this way, it starts the ordinary way instead.
+To undo, pick it again in the HiDPI Launcher."
+            exit 0 ;;
+        third)
+            stop_test; exit 0 ;;
+        *)
+            stop_test ;;
+    esac
+done
+
+say "Neither way made <b>$NAME</b> sharp. Nothing was changed."
+exit 1

@@ -17,7 +17,22 @@
 #   hidpi-run -c some-app.desktop  DON'T run it -- create a "<App> (HiDPI)" menu
 #                                  launcher for it instead (options bake in)
 #
+# There is a second way to make a program sharp, for one that can speak
+# Wayland but starts on X11 anyway (it switches itself over, or its bundled
+# toolkit is disconnected by the compositor):
+#   hidpi-run --native ...         run it as a normal Wayland window instead of
+#                                  inside an Xwayland surface. No surface, no
+#                                  clipboard bridge: it is an ordinary window,
+#                                  and a tray icon keeps working.
+# The HiDPI Launcher (hidpi-menu, hidpi-fix) tries both ways and remembers the
+# one that works, so this option is rarely typed by hand.
+#
 # Options (before the target):
+#   -n, --native  run as a Wayland client (see above); the options below that
+#                 concern the Xwayland surface are then ignored
+#   --fallback    if this way of running fails at start, run the program the
+#                 ordinary way instead and say so in a notification. Used by
+#                 the launchers hidpi-fix writes, so a program always opens.
 #   -c            create a menu launcher instead of running (keeps the options)
 #   -f            fullscreen on one output. EXPERIMENTAL: with Xwayland 24.1
 #                 the fullscreen surface comes up at low resolution.
@@ -39,18 +54,23 @@ FULLSCREEN=""
 DO_FILL=1
 DO_CLIP=1
 CREATE=""
+NATIVE=""
+FALLBACK=""
+EXPLICIT=""
 
 while [ $# -gt 0 ]; do
     case "$1" in
         -c|--create) CREATE=1 ;;
+        -n|--native) NATIVE=1 ;;
+        --fallback) FALLBACK=1 ;;
         -f|--fullscreen) FULLSCREEN=1 ;;
         -o|--output) OUTPUT="$2"; shift ;;
         -g|--geometry) GEOM="$2"; shift ;;
         -s|--scale) SCALE="$2"; shift ;;
         --no-fill) DO_FILL="" ;;
         --no-clip) DO_CLIP="" ;;
-        -h|--help) sed -n '2,30p' "$0"; exit 0 ;;
-        --) shift; break ;;
+        -h|--help) sed -n '2,45p' "$0"; exit 0 ;;
+        --) shift; EXPLICIT=1; break ;;
         -*) echo "hidpi-run: unknown option '$1'" >&2; exit 2 ;;
         *) break ;;
     esac
@@ -106,7 +126,8 @@ CMD=""
 DF=""
 if [ $# -gt 0 ]; then
     # explicit command (from after --) OR a .desktop/name
-    if [ $# -eq 1 ] && { [ -f "$1" ] || resolve_desktop "$1" >/dev/null; }; then
+    # (after "--" a lone argument is still a command, never a .desktop)
+    if [ -z "$EXPLICIT" ] && [ $# -eq 1 ] && { [ -f "$1" ] || resolve_desktop "$1" >/dev/null; }; then
         df=$(resolve_desktop "$1")
         [ -z "$df" ] && df="$1"
         CMD=$(desktop_exec "$df")
@@ -115,6 +136,7 @@ if [ $# -gt 0 ]; then
     else
         CMD="$*"
         DF=$(desktop_for_cmd "$CMD")
+        EXPLICIT=1
     fi
 else
     # no target: GUI chooser of installed apps
@@ -125,6 +147,67 @@ else
     CMD=$(desktop_exec "$df")
     [ -z "$CMD" ] && { echo "hidpi-run: no Exec in $df" >&2; exit 1; }
     DF="$df"
+fi
+
+# ---- Running the program the ordinary way -----------------------------------
+# What --fallback falls back to: the command as the session would start it.
+# An explicit command keeps its arguments exactly (file names with spaces).
+run_plain() {
+    if [ -n "$EXPLICIT" ]; then "$@"; else sh -c "$CMD"; fi
+}
+
+fall_back() {     # $1 = what went wrong; then the original arguments
+    why=$1; shift
+    [ -n "$FALLBACK" ] || return 0
+    name=""
+    [ -n "$DF" ] && name=$(grep -m1 '^Name=' "$DF" | cut -d= -f2-)
+    [ -z "$name" ] && name=$(basename "${CMD%% *}")
+    command -v notify-send >/dev/null 2>&1 && notify-send -a "HiDPI Launcher" \
+        -i preferences-desktop-display "$name: started the ordinary way" \
+        "$why The HiDPI Launcher can remove or redo the fix." 2>/dev/null
+    run_plain "$@"
+    exit $?
+}
+
+# ---- --native: run as a Wayland client --------------------------------------
+# The toolkits are told to use Wayland and nothing else, so a program that
+# cannot do it fails at once instead of quietly opening blurry on X11. The
+# toolkit scale variables are cleared: a Wayland client takes its scale from
+# the output. hidpi-wl-shim.so (see its source) stops the program switching
+# itself back to X11 and keeps its window size requests valid.
+if [ -n "$NATIVE" ]; then
+    [ -n "${WAYLAND_DISPLAY:-}" ] || { fall_back "This is not a Wayland session." "$@"; echo "hidpi-run: --native needs a Wayland session." >&2; exit 1; }
+    WLSHIM=""
+    for s in /usr/lib/mate-wayland-desktop/hidpi-wl-shim.so \
+             "$HOME/.local/lib/hidpi/hidpi-wl-shim.so"; do
+        [ -f "$s" ] && { WLSHIM="$s"; break; }
+    done
+    [ -n "$WLSHIM" ] && [ -n "${LD_PRELOAD:-}" ] && WLSHIM="$WLSHIM:$LD_PRELOAD"
+
+    started=$(date +%s)
+    [ -n "$EXPLICIT" ] || set -- sh -c "$CMD"
+    env -u QT_SCALE_FACTOR -u QT_AUTO_SCREEN_SCALE_FACTOR -u GDK_SCALE -u GDK_DPI_SCALE \
+        ${WLSHIM:+LD_PRELOAD="$WLSHIM"} \
+        XDG_SESSION_TYPE=wayland QT_QPA_PLATFORM=wayland GDK_BACKEND=wayland \
+        ELECTRON_OZONE_PLATFORM_HINT=wayland MOZ_ENABLE_WAYLAND=1 \
+        "$@" &
+    APP=$!
+    trap 'kill -TERM "$APP" 2>/dev/null' INT TERM HUP
+    wait "$APP"; rc=$?
+    trap - INT TERM HUP
+    # Failed within a few seconds of starting: this way does not work for the
+    # program (or no longer does, after an update). A program that hands over
+    # to a copy already running exits with 0 and is left alone.
+    if [ "$rc" -ne 0 ] && [ "$rc" -lt 129 ] || [ "$rc" -eq 134 ] || [ "$rc" -eq 139 ]; then
+        if [ $(( $(date +%s) - started )) -lt 15 ]; then
+            if [ -n "$EXPLICIT" ]; then
+                fall_back "It could not start as a Wayland window." "$@"
+            else
+                fall_back "It could not start as a Wayland window."
+            fi
+        fi
+    fi
+    exit "$rc"
 fi
 
 # ---- Name and icon for the taskbar -----------------------------------------
@@ -147,7 +230,7 @@ for s in /usr/lib/mate-wayland-desktop/hidpi-xwl-shim.so \
     [ -f "$s" ] && { SHIM="$s"; break; }
 done
 
-command -v Xwayland >/dev/null || { echo "hidpi-run: Xwayland not found." >&2; exit 1; }
+command -v Xwayland >/dev/null || { fall_back "Xwayland is not installed." "$@"; echo "hidpi-run: Xwayland not found." >&2; exit 1; }
 
 # ---- Start a dedicated hi-dpi Xwayland surface -----------------------------
 # -decorate drives Xwayland through libdecor, which completes the xdg_surface
@@ -208,7 +291,7 @@ start_xwayland() {
 tries=0
 until start_xwayland; do
     tries=$((tries + 1))
-    [ "$tries" -ge 4 ] && { echo "hidpi-run: Xwayland could not start." >&2; exit 1; }
+    [ "$tries" -ge 4 ] && { fall_back "Its Xwayland window could not start." "$@"; echo "hidpi-run: Xwayland could not start." >&2; exit 1; }
 done
 
 # ---- Two-way clipboard bridge (text) ---------------------------------------

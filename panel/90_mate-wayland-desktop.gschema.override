@@ -13,6 +13,13 @@ icon-theme='mate-wayland-desktop'
 font-name='Noto Sans 10'
 document-font-name='Noto Sans 10'
 
+# Volume applet: a plain volume slider. mate-media 1.29 adds media player
+# controls (track, cover picture, play and stop) to the slider's popup; they
+# make it large and it does not always close. They can be switched back on in
+# dconf (org.mate.volume-control show-player-controls).
+[org.mate.volume-control]
+show-player-controls=false
+
 # X11 programs (through XWayland) take their size from Xft.dpi. Left at 0,
 # MATE's settings daemon works it out from the screen and gets about 311
 # on a 4K laptop panel, so such programs draw three times too large. The

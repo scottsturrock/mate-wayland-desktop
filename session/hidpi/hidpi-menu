@@ -1,20 +1,24 @@
 #!/bin/sh
-# hidpi-menu -- pop up an app picker (icons, type to filter) and run whatever
-# you choose sharp on a HiDPI output, through hidpi-run. One launcher that can
-# start any installed app at the right resolution; no per-app menu entries
-# needed. Part of MATE Wayland Desktop.
+# hidpi-menu -- the HiDPI Launcher: pop up an app picker (icons, type to
+# filter) and make whatever you choose sharp on a HiDPI output. Part of MATE
+# Wayland Desktop.
+#
+# The chosen program is handed to hidpi-fix, which starts it sharp, asks
+# whether it worked, and on "Yes, keep it" makes the program's ordinary menu
+# entry start it that way from then on. Choosing a program that already has a
+# fix offers to remove it.
 #
 # It is fuzzel's normal application launcher with a launch prefix, so the
-# chosen app's command is run as:  hidpi-run -- <that command>
+# chosen app's command is run as:  hidpi-fix -- <that command>
 #
 # Extra arguments are passed through to fuzzel (e.g. --output, --width).
 # Appearance: ~/.config/mate-wayland-desktop/hidpi-menu.ini if you make one,
 # otherwise the system copy in /etc/xdg/mate-wayland-desktop/.
-HR="$(dirname "$0")/hidpi-run"
-[ -x "$HR" ] || HR=$(command -v hidpi-run) || { echo "hidpi-menu: hidpi-run not found." >&2; exit 1; }
+HF="$(dirname "$0")/hidpi-fix"
+[ -x "$HF" ] || HF=$(command -v hidpi-fix) || { echo "hidpi-menu: hidpi-fix not found." >&2; exit 1; }
 command -v fuzzel >/dev/null 2>&1 || { echo "hidpi-menu: fuzzel is not installed." >&2; exit 1; }
 for CFG in "$HOME/.config/mate-wayland-desktop/hidpi-menu.ini" \
            /etc/xdg/mate-wayland-desktop/hidpi-menu.ini; do
     [ -f "$CFG" ] && { set -- --config "$CFG" "$@"; break; }
 done
-exec fuzzel --launch-prefix="$HR -- " "$@"
+exec fuzzel --launch-prefix="$HF -- " "$@"

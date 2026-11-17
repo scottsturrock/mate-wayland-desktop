@@ -1,0 +1,154 @@
+--- a/mate-volume-control/gvc-stream-applet-icon.c
++++ b/mate-volume-control/gvc-stream-applet-icon.c
+@@ -27,6 +27,8 @@
+ #include <gtk/gtk.h>
+ #include <gdk/gdkkeysyms.h>
+ 
++#include <canberra-gtk.h>
++
+ #if defined(ENABLE_WAYLAND)
+ #include <gdk/gdkwayland.h>
+ #include <gtk-layer-shell/gtk-layer-shell.h>
+@@ -63,6 +65,7 @@
+         MateMixerStreamControl *control;
+         MatePanelAppletOrient   orient;
+         guint                   size;
++        guint                   scroll_feedback_id;
+ #if defined(ENABLE_WAYLAND)
+         GList                  *click_catchers;
+ #endif
+@@ -651,6 +654,104 @@
+         }
+ }
+ 
++/* Scrolling over the icon changes the volume with nothing on screen to show
++ * it. Say what the volume now is in a notification (one that is replaced in
++ * place, with a level bar where the notification daemon draws one) and play
++ * the sound the slider plays. This runs a moment after the scroll, so the
++ * mixer has the new volume, and at most once per moment while the wheel
++ * turns. The notification matches the one the session's volume keys show. */
++static gboolean
++scroll_feedback_cb (gpointer user_data)
++{
++        GvcStreamAppletIcon         *icon = GVC_STREAM_APPLET_ICON (user_data);
++        MateMixerStreamControlFlags  flags;
++        gboolean                     muted = FALSE;
++        guint                        percent = 0;
++        const gchar                 *icon_name;
++        gchar                       *title;
++        gchar                       *value;
++        gchar                       *argv[13];
++
++        icon->priv->scroll_feedback_id = 0;
++
++        if (icon->priv->control == NULL)
++                return G_SOURCE_REMOVE;
++
++        flags = mate_mixer_stream_control_get_flags (icon->priv->control);
++        if (flags & MATE_MIXER_STREAM_CONTROL_MUTE_READABLE)
++                muted = mate_mixer_stream_control_get_mute (icon->priv->control);
++        if (flags & MATE_MIXER_STREAM_CONTROL_VOLUME_READABLE) {
++                guint volume = mate_mixer_stream_control_get_volume (icon->priv->control);
++                guint normal = mate_mixer_stream_control_get_normal_volume (icon->priv->control);
++
++                if (normal > 0)
++                        percent = (guint) round (100.0 * volume / normal);
++        }
++
++        if (muted || percent == 0)
++                icon_name = "audio-volume-muted-symbolic";
++        else if (percent >= 67)
++                icon_name = "audio-volume-high-symbolic";
++        else if (percent >= 34)
++                icon_name = "audio-volume-medium-symbolic";
++        else
++                icon_name = "audio-volume-low-symbolic";
++
++        if (muted)
++                title = g_strdup ("Volume: muted");
++        else
++                title = g_strdup_printf ("Volume: %u%%", percent);
++        value = g_strdup_printf ("int:value:%u", MIN (percent, 100));
++
++        argv[0] = "notify-send";
++        argv[1] = "-a";
++        argv[2] = "Keys";
++        argv[3] = "-t";
++        argv[4] = "1500";
++        argv[5] = "-i";
++        argv[6] = (gchar *) icon_name;
++        argv[7] = "-h";
++        argv[8] = "string:x-canonical-private-synchronous:mate-wayland-desktop-keys";
++        argv[9] = "-h";
++        argv[10] = value;
++        argv[11] = title;
++        argv[12] = NULL;
++        g_spawn_async (NULL, argv, NULL,
++                       G_SPAWN_SEARCH_PATH |
++                       G_SPAWN_STDOUT_TO_DEV_NULL |
++                       G_SPAWN_STDERR_TO_DEV_NULL,
++                       NULL, NULL, NULL, NULL);
++        g_free (title);
++        g_free (value);
++
++        if (!muted)
++                ca_gtk_play_for_widget (GTK_WIDGET (icon), 0,
++                                        CA_PROP_EVENT_ID, "audio-volume-change",
++                                        CA_PROP_EVENT_DESCRIPTION, "Volume change",
++                                        CA_PROP_APPLICATION_ID, "org.mate.VolumeControl",
++                                        CA_PROP_APPLICATION_ICON_NAME, "multimedia-volume-control",
++                                        NULL);
++
++        return G_SOURCE_REMOVE;
++}
++
++static gboolean
++scroll_volume (GvcStreamAppletIcon *icon,
++               GdkScrollDirection   direction)
++{
++        gboolean handled;
++
++        handled = gvc_channel_bar_scroll (GVC_CHANNEL_BAR (icon->priv->bar), direction);
++
++        /* With the dock open the slider itself shows the level. */
++        if (handled &&
++            !gtk_widget_get_visible (icon->priv->dock) &&
++            icon->priv->scroll_feedback_id == 0)
++                icon->priv->scroll_feedback_id = g_timeout_add (80, scroll_feedback_cb, icon);
++
++        return handled;
++}
++
+ static gboolean
+ on_applet_icon_scroll_event (GtkWidget           *event_box,
+                              GdkEventScroll      *event,
+@@ -659,7 +760,7 @@
+         if (icon->priv->player != NULL) {
+                 if (icon->priv->applet_settings != NULL &&
+                     !g_settings_get_boolean (icon->priv->applet_settings, "horizontal-scroll-controls"))
+-                        return gvc_channel_bar_scroll (GVC_CHANNEL_BAR (icon->priv->bar), event->direction);
++                        return scroll_volume (icon, event->direction);
+ 
+                 if (event->direction == GDK_SCROLL_LEFT) {
+                         gvc_mpris_player_previous (icon->priv->player);
+@@ -671,7 +772,7 @@
+                 }
+         }
+ 
+-        return gvc_channel_bar_scroll (GVC_CHANNEL_BAR (icon->priv->bar), event->direction);
++        return scroll_volume (icon, event->direction);
+ }
+ 
+ void
+@@ -1279,6 +1380,11 @@
+                 icon->priv->dock = NULL;
+         }
+ 
++        if (icon->priv->scroll_feedback_id != 0) {
++                g_source_remove (icon->priv->scroll_feedback_id);
++                icon->priv->scroll_feedback_id = 0;
++        }
++
+         if (icon->priv->player != NULL)
+                 g_signal_handlers_disconnect_by_data (icon->priv->player, icon);
+         g_clear_object (&icon->priv->player);

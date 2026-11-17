@@ -1,0 +1,131 @@
+--- a/mate-volume-control/gvc-stream-applet-icon.c
++++ b/mate-volume-control/gvc-stream-applet-icon.c
+@@ -63,6 +63,9 @@
+         MateMixerStreamControl *control;
+         MatePanelAppletOrient   orient;
+         guint                   size;
++#if defined(ENABLE_WAYLAND)
++        GList                  *click_catchers;
++#endif
+ };
+ 
+ enum
+@@ -205,6 +208,82 @@
+         }
+ }
+ 
++#if defined(ENABLE_WAYLAND)
++static void popdown_dock (GvcStreamAppletIcon *icon);
++
++/* A layer-shell surface receives no pointer events outside itself, and the
++ * seat grab that closes the dock on an outside click on X11 does nothing for
++ * it, so on Wayland the dock stayed open until its icon was clicked again.
++ * While the dock is open, put an invisible surface over every monitor, under
++ * the dock; a click on one of them closes the dock. */
++static void
++remove_click_catchers (GvcStreamAppletIcon *icon)
++{
++        g_list_free_full (icon->priv->click_catchers, (GDestroyNotify) gtk_widget_destroy);
++        icon->priv->click_catchers = NULL;
++}
++
++static gboolean
++on_click_catcher_button_press (GtkWidget           *widget,
++                               GdkEventButton      *event,
++                               GvcStreamAppletIcon *icon)
++{
++        popdown_dock (icon);
++        return TRUE;
++}
++
++static gboolean
++on_click_catcher_draw (GtkWidget *widget,
++                       cairo_t   *cr,
++                       gpointer   user_data)
++{
++        cairo_set_operator (cr, CAIRO_OPERATOR_SOURCE);
++        cairo_set_source_rgba (cr, 0.0, 0.0, 0.0, 0.0);
++        cairo_paint (cr);
++        return TRUE;
++}
++
++static void
++add_click_catchers (GvcStreamAppletIcon *icon,
++                    GdkDisplay          *display)
++{
++        int i;
++
++        remove_click_catchers (icon);
++
++        for (i = 0; i < gdk_display_get_n_monitors (display); i++) {
++                GtkWidget *catcher;
++                GdkVisual *visual;
++
++                catcher = gtk_window_new (GTK_WINDOW_POPUP);
++                gtk_window_set_decorated (GTK_WINDOW (catcher), FALSE);
++                gtk_layer_init_for_window (GTK_WINDOW (catcher));
++                gtk_layer_set_namespace (GTK_WINDOW (catcher), "volume-control-dismiss");
++                gtk_layer_set_monitor (GTK_WINDOW (catcher), gdk_display_get_monitor (display, i));
++                gtk_layer_set_layer (GTK_WINDOW (catcher), GTK_LAYER_SHELL_LAYER_TOP);
++                gtk_layer_set_anchor (GTK_WINDOW (catcher), GTK_LAYER_SHELL_EDGE_TOP, TRUE);
++                gtk_layer_set_anchor (GTK_WINDOW (catcher), GTK_LAYER_SHELL_EDGE_BOTTOM, TRUE);
++                gtk_layer_set_anchor (GTK_WINDOW (catcher), GTK_LAYER_SHELL_EDGE_LEFT, TRUE);
++                gtk_layer_set_anchor (GTK_WINDOW (catcher), GTK_LAYER_SHELL_EDGE_RIGHT, TRUE);
++                /* Cover the panels too: do not make room for them. */
++                gtk_layer_set_exclusive_zone (GTK_WINDOW (catcher), -1);
++
++                visual = gdk_screen_get_rgba_visual (gtk_widget_get_screen (catcher));
++                if (visual != NULL)
++                        gtk_widget_set_visual (catcher, visual);
++                gtk_widget_set_app_paintable (catcher, TRUE);
++                gtk_widget_add_events (catcher, GDK_BUTTON_PRESS_MASK);
++                g_signal_connect (catcher, "draw",
++                                  G_CALLBACK (on_click_catcher_draw), NULL);
++                g_signal_connect (catcher, "button-press-event",
++                                  G_CALLBACK (on_click_catcher_button_press), icon);
++
++                gtk_widget_show (catcher);
++                icon->priv->click_catchers = g_list_prepend (icon->priv->click_catchers, catcher);
++        }
++}
++#endif /* wayland support */
++
+ static gboolean
+ popup_dock (GvcStreamAppletIcon *icon, guint time)
+ {
+@@ -340,6 +419,8 @@
+             }
+             /* Discard a size retained from a previous popup layout. */
+             gtk_window_resize (GTK_WINDOW (icon->priv->dock), 1, 1);
++            /* Mapped before the dock, so the dock is above them. */
++            add_click_catchers (icon, display);
+             gtk_widget_show_all (icon->priv->dock);
+ 
+             /* Grab focus */
+@@ -718,6 +799,17 @@
+         gboolean      inside_dock;
+ 
+         if (event->type == GDK_BUTTON_PRESS) {
++#if defined(ENABLE_WAYLAND)
++                /* The dock holds the GTK grab, so a press on one of the
++                 * surfaces around it arrives here. Positions cannot be
++                 * compared across surfaces on Wayland; the window can. */
++                if (GDK_IS_WAYLAND_DISPLAY (gtk_widget_get_display (icon->priv->dock)) &&
++                    event->window != NULL &&
++                    gdk_window_get_toplevel (event->window) != gtk_widget_get_window (icon->priv->dock)) {
++                        gvc_icon_release_grab (icon, event);
++                        return TRUE;
++                }
++#endif
+                 current_grab = gtk_grab_get_current ();
+                 if (current_grab != NULL &&
+                     current_grab != icon->priv->dock &&
+@@ -1290,6 +1382,8 @@
+                 gtk_layer_init_for_window (GTK_WINDOW (icon->priv->dock));
+                 gtk_layer_set_layer (GTK_WINDOW (icon->priv->dock), GTK_LAYER_SHELL_LAYER_TOP);
+                 gtk_layer_set_keyboard_mode (GTK_WINDOW (icon->priv->dock), GTK_LAYER_SHELL_KEYBOARD_MODE_ON_DEMAND);
++                g_signal_connect_swapped (icon->priv->dock, "hide",
++                                          G_CALLBACK (remove_click_catchers), icon);
+         }
+ #endif
+ 

@@ -20,11 +20,12 @@ libnotify-bin
 # these two.
 libgtk-4-1
 libadwaita-1-0
-# HiDPI launcher (hidpi-run, hidpi-menu): runs an X11 program in its own
-# high-resolution Xwayland window so it is sharp on a scaled screen. xdotool
-# and x11-utils watch and size the program's window, xclip carries the
-# clipboard across, fuzzel is the picker, zenity the file chooser, libdecor
-# is what Xwayland needs to run in a window of its own.
+# HiDPI launcher (hidpi-run, hidpi-menu, hidpi-fix): makes a program that is
+# blurry on a scaled screen sharp, in its own high-resolution Xwayland window
+# or as a normal Wayland window. xdotool and x11-utils watch and size the
+# program's window, xclip carries the clipboard across, fuzzel is the picker,
+# zenity asks the questions, libdecor is what Xwayland needs to run in a
+# window of its own.
 xdotool
 xclip
 x11-utils
@@ -87,6 +88,10 @@ fonts-dejavu-core
 fonts-liberation
 fonts-noto-color-emoji
 fonts-ubuntu
+# Chinese, Japanese and Korean text, and the fullwidth punctuation that
+# download tools put in file names in place of : ? and |. Without it these
+# show as boxes with a number inside.
+fonts-noto-cjk
 yaru-theme-icon
 yaru-theme-gtk
 adwaita-icon-theme
