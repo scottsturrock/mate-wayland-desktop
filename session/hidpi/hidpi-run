@@ -1,0 +1,336 @@
+#!/bin/sh
+# hidpi-run -- run any X11 / Java / Qt / GTK app sharp on a HiDPI output under
+# labwc. Part of MATE Wayland Desktop.
+#
+# Why: labwc/wlroots upscales XWayland windows by the output scale, so on a
+# scale-2 panel a normal X11 window is bitmap-upscaled and looks fuzzy, and no
+# toolkit scale setting can beat it. This instead renders the app inside its
+# OWN rootful, hi-dpi Xwayland surface, which labwc shows 1:1 -- so it is drawn
+# at native resolution and stays sharp, while the rest of the desktop keeps its
+# scaling.
+#
+# Usage:
+#   hidpi-run                      pick an installed app (.desktop) and run it
+#   hidpi-run some-app.desktop     run the app from a .desktop file (a test run)
+#   hidpi-run firefox              run an installed app by name (its .desktop)
+#   hidpi-run -- CMD [args...]     run an explicit command line
+#   hidpi-run -c some-app.desktop  DON'T run it -- create a "<App> (HiDPI)" menu
+#                                  launcher for it instead (options bake in)
+#
+# Options (before the target):
+#   -c            create a menu launcher instead of running (keeps the options)
+#   -f            fullscreen on one output. EXPERIMENTAL: with Xwayland 24.1
+#                 the fullscreen surface comes up at low resolution.
+#   -o OUTPUT     output to go fullscreen on, e.g. eDP-1 (with -f; default: the
+#                 output with the largest scale)
+#   -g WxH        window size on the desktop when not fullscreen, e.g. 1400x900
+#                 (default: as large as the screen allows)
+#   -s SCALE      HiDPI scale, integer (default 2 = 200%)
+#   --no-fill     do not keep the app's main window pinned to fill the surface
+#   --no-clip     do not bridge the clipboard
+#
+# Switch between the app and the desktop with Alt-Tab; it is one labwc window.
+set -u
+
+OUTPUT=""
+GEOM=""
+SCALE="2"
+FULLSCREEN=""
+DO_FILL=1
+DO_CLIP=1
+CREATE=""
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -c|--create) CREATE=1 ;;
+        -f|--fullscreen) FULLSCREEN=1 ;;
+        -o|--output) OUTPUT="$2"; shift ;;
+        -g|--geometry) GEOM="$2"; shift ;;
+        -s|--scale) SCALE="$2"; shift ;;
+        --no-fill) DO_FILL="" ;;
+        --no-clip) DO_CLIP="" ;;
+        -h|--help) sed -n '2,30p' "$0"; exit 0 ;;
+        --) shift; break ;;
+        -*) echo "hidpi-run: unknown option '$1'" >&2; exit 2 ;;
+        *) break ;;
+    esac
+    shift
+done
+
+# -c/--create: don't run the app, create a "<App> (HiDPI)" menu launcher for it
+# instead (next to its source .desktop). The chosen options are baked in.
+if [ -n "$CREATE" ]; then
+    dopts=""
+    [ -n "$FULLSCREEN" ]           && dopts="$dopts -f"
+    [ -n "$OUTPUT" ]               && dopts="$dopts -o $OUTPUT"
+    [ -n "$GEOM" ]                 && dopts="$dopts -g $GEOM"
+    [ "$SCALE" != "2" ]            && dopts="$dopts -s $SCALE"
+    [ -z "$DO_FILL" ]              && dopts="$dopts --no-fill"
+    [ -z "$DO_CLIP" ]              && dopts="$dopts --no-clip"
+    here=$(dirname "$0")
+    # shellcheck disable=SC2086
+    exec "$here/hidpi-desktop" $dopts "$@"
+fi
+
+# ---- Work out the command to run -------------------------------------------
+# After "--", the rest is the literal command. Otherwise the first argument is
+# a .desktop file (path, or an installed app name), or -- with nothing -- we
+# pop up a chooser of installed apps.
+APPDIRS="$HOME/.local/share/applications /usr/share/applications"
+
+resolve_desktop() {   # $1 = name or path -> prints .desktop path or nothing
+    [ -f "$1" ] && { printf '%s\n' "$1"; return; }
+    for d in $APPDIRS; do
+        [ -f "$d/$1" ] && { printf '%s\n' "$d/$1"; return; }
+        [ -f "$d/$1.desktop" ] && { printf '%s\n' "$d/$1.desktop"; return; }
+    done
+}
+
+desktop_exec() {      # $1 = .desktop file -> prints runnable command
+    # take the first Exec=, drop the %-field codes, collapse spaces
+    grep -m1 '^Exec=' "$1" | cut -d= -f2- \
+        | sed -E 's/%[fFuUdDnNickvm]//g; s/  +/ /g; s/[[:space:]]+$//'
+}
+
+desktop_for_cmd() {   # $1 = command line -> prints the .desktop that runs it
+    for d in $APPDIRS; do
+        for f in "$d"/*.desktop; do
+            [ -f "$f" ] || continue
+            case "$f" in *-hidpi.desktop) continue ;; esac
+            [ "$(desktop_exec "$f")" = "$1" ] && { printf '%s\n' "$f"; return; }
+        done
+    done
+}
+
+CMD=""
+DF=""
+if [ $# -gt 0 ]; then
+    # explicit command (from after --) OR a .desktop/name
+    if [ $# -eq 1 ] && { [ -f "$1" ] || resolve_desktop "$1" >/dev/null; }; then
+        df=$(resolve_desktop "$1")
+        [ -z "$df" ] && df="$1"
+        CMD=$(desktop_exec "$df")
+        [ -z "$CMD" ] && { echo "hidpi-run: no Exec in $df" >&2; exit 1; }
+        DF="$df"
+    else
+        CMD="$*"
+        DF=$(desktop_for_cmd "$CMD")
+    fi
+else
+    # no target: GUI chooser of installed apps
+    command -v zenity >/dev/null || { echo "hidpi-run: give an app or command." >&2; exit 2; }
+    df=$(zenity --file-selection --title="Run crisp on HiDPI: pick an app" \
+            --filename=/usr/share/applications/ \
+            --file-filter='Applications | *.desktop' 2>/dev/null) || exit 0
+    CMD=$(desktop_exec "$df")
+    [ -z "$CMD" ] && { echo "hidpi-run: no Exec in $df" >&2; exit 1; }
+    DF="$df"
+fi
+
+# ---- Name and icon for the taskbar -----------------------------------------
+# Xwayland calls its window "Xwayland on :N" with a generic application id, so
+# the taskbar could not tell which app is inside. A small preloaded shim
+# (hidpi-xwl-shim.so) swaps in the app's own name and id; the id is the
+# .desktop basename, which is what the panel uses to find the icon.
+if [ -n "$DF" ]; then
+    APP_TITLE=$(grep -m1 '^Name=' "$DF" | cut -d= -f2-)
+    APP_ID=$(basename "$DF" .desktop)
+else
+    first=${CMD%% *}
+    APP_ID=$(basename "$first")
+    APP_TITLE=""
+fi
+[ -z "$APP_TITLE" ] && APP_TITLE="$APP_ID"
+SHIM=""
+for s in /usr/lib/mate-wayland-desktop/hidpi-xwl-shim.so \
+         "$HOME/.local/lib/hidpi/hidpi-xwl-shim.so"; do
+    [ -f "$s" ] && { SHIM="$s"; break; }
+done
+
+command -v Xwayland >/dev/null || { echo "hidpi-run: Xwayland not found." >&2; exit 1; }
+
+# ---- Start a dedicated hi-dpi Xwayland surface -----------------------------
+# -decorate drives Xwayland through libdecor, which completes the xdg_surface
+# configure handshake before attaching a buffer; plain rootful mode races that
+# and dies with "xdg_surface has never been configured". We retry in case the
+# race still bites. With the shim, the window carries the app's own title and
+# labwc draws its normal title bar (one frame, the usual close button).
+# Without the shim the title stays "Xwayland on :N" and the window keeps
+# Xwayland's own frame.
+# Xwayland 24.1 with -hidpi multiplies -geometry by the output scale three
+# times over (300x200 gives a 2400x1600 surface at scale 2), where the window
+# we want is the asked size times the scale once. So divide by scale squared.
+# With no -g, ask for more than any screen has: the compositor then gives the
+# window all the room there is.
+if [ -n "$GEOM" ]; then
+    gw=${GEOM%x*}; gh=${GEOM#*x}
+    case "$gw$gh" in ''|*[!0-9]*) echo "hidpi-run: -g wants WxH, e.g. 1400x900" >&2; exit 2 ;; esac
+    XGEOM="$(( gw / (SCALE * SCALE) ))x$(( gh / (SCALE * SCALE) ))"
+else
+    XGEOM="1900x1150"
+fi
+
+# Fullscreen with no -o: take the output with the largest scale.
+if [ -n "$FULLSCREEN" ] && [ -z "$OUTPUT" ]; then
+    OUTPUT=$(wlr-randr 2>/dev/null | awk '/^[^ ]/ {name=$1}
+        /Scale:/ {if ($2 + 0 > best) {best = $2 + 0; out = name}} END {print out}')
+    [ -n "$OUTPUT" ] || { echo "hidpi-run: name the output for -f with -o (see wlr-randr)." >&2; exit 2; }
+fi
+
+start_xwayland() {
+    N=1
+    while [ -e "/tmp/.X11-unix/X$N" ]; do N=$((N + 1)); done
+    DISP=":$N"
+    if [ -n "$FULLSCREEN" ]; then
+        # Xwayland refuses -decorate with -fullscreen, and needs the output
+        # named. Without -decorate there is no libdecor, so the name-and-icon
+        # library has nothing to act on: a fullscreen window keeps Xwayland's
+        # generic name on the taskbar.
+        set -- -hidpi -fullscreen -output "$OUTPUT" "$DISP"
+    else
+        set -- -decorate -hidpi -geometry "$XGEOM" "$DISP"
+    fi
+    env -u DISPLAY WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}" \
+        GDK_BACKEND=wayland \
+        ${SHIM:+LD_PRELOAD="$SHIM"} ${SHIM:+HIDPI_DECOR=server} \
+        HIDPI_TITLE="$APP_TITLE" HIDPI_APP_ID="$APP_ID" \
+        Xwayland "$@" 2>/dev/null &
+    XW=$!
+    i=0
+    while [ ! -S "/tmp/.X11-unix/X$N" ]; do
+        kill -0 "$XW" 2>/dev/null || return 1
+        i=$((i + 1)); [ "$i" -gt 50 ] && return 1
+        sleep 0.1
+    done
+    return 0
+}
+
+tries=0
+until start_xwayland; do
+    tries=$((tries + 1))
+    [ "$tries" -ge 4 ] && { echo "hidpi-run: Xwayland could not start." >&2; exit 1; }
+done
+
+# ---- Two-way clipboard bridge (text) ---------------------------------------
+BR1="" ; BR2=""
+if [ -n "$DO_CLIP" ] && command -v xclip >/dev/null 2>&1 && command -v wl-paste >/dev/null 2>&1; then
+    wl-paste --type text --watch sh -c "DISPLAY=$DISP xclip -selection clipboard -i" &
+    BR1=$!
+    (
+        last=""
+        while kill -0 "$XW" 2>/dev/null; do
+            cur=$(DISPLAY=$DISP xclip -selection clipboard -o 2>/dev/null)
+            [ "$cur" != "$last" ] && { printf '%s' "$cur" | wl-copy; last="$cur"; }
+            sleep 0.4
+        done
+    ) &
+    BR2=$!
+fi
+
+# ---- Run the app; fill its main window; tear down promptly when it closes ---
+# No window manager runs inside this X server, so we manage two things in one
+# loop while the app runs:
+#   * Fill: an app can open smaller than the surface, or be dragged inside
+#     it, leaving a black margin. We keep its main window pinned to the whole
+#     surface, so the two behave as one window (--no-fill turns this off).
+#   * Prompt close: when the app's window closes, the process itself can take
+#     many seconds to finish exiting (big apps especially). We do NOT want to
+#     sit on a black surface that whole time, so once the main window has
+#     appeared and then no windows remain, we tear the surface down at once and
+#     let the process finish exiting in the background. A save/confirm dialog
+#     still counts as a window, so we wait for the user to deal with it.
+#
+# Toolkit scale vars make the hi-dpi buffer hold real detail (crisp), not an
+# upscaled low-res image. The app runs in the background so we can watch it.
+# WAYLAND_DISPLAY is removed and the toolkits are told to use X11, so a
+# program that could also speak Wayland still opens inside this surface.
+env -u WAYLAND_DISPLAY DISPLAY="$DISP" \
+    GDK_BACKEND=x11 QT_QPA_PLATFORM=xcb XDG_SESSION_TYPE=x11 \
+    GDK_SCALE="$SCALE" \
+    QT_SCALE_FACTOR="$SCALE" \
+    _JAVA_OPTIONS="-Dsun.java2d.uiScale=$SCALE" \
+    sh -c "$CMD" &
+APP=$!
+
+# Always clean up, however we stop (window closed, app quit, or we are killed):
+# otherwise the clipboard helpers and the X server are left running.
+cleanup() {
+    trap - EXIT INT TERM HUP
+    kill -TERM "$APP" 2>/dev/null          # app finishes exiting headless
+    [ -n "$BR1" ] && { pkill -P "$BR1" 2>/dev/null; kill "$BR1" 2>/dev/null; }
+    [ -n "$BR2" ] && { pkill -P "$BR2" 2>/dev/null; kill "$BR2" 2>/dev/null; }
+    kill "$XW" 2>/dev/null
+    exit 0
+}
+trap cleanup EXIT INT TERM HUP
+
+# The X root window is always "visible" and as big as the surface; it must not
+# be counted as an app window, or we would never see the app's windows go.
+ROOT=$(DISPLAY="$DISP" xwininfo -root 2>/dev/null | awk '/Window id:/ {print $4; exit}')
+ROOT=$(printf '%d' "${ROOT:-0}" 2>/dev/null || echo 0)
+
+main_seen=0
+gone=0
+filled=""
+fill_tries=0
+while kill -0 "$XW" 2>/dev/null; do
+    geo=$(DISPLAY="$DISP" xdotool getdisplaygeometry 2>/dev/null)
+    sw=${geo% *}; sh=${geo#* }
+
+    # enumerate visible top-levels: count them, and find the largest. Match on
+    # an empty name pattern (not '.') because many app main windows carry no
+    # WM_NAME -- '.' would miss them; --onlyvisible drops 1x1 helper windows.
+    nwin=0; best=""; bestarea=0; bw=0; bh=0; bx=0; by=0
+    for w in $(DISPLAY="$DISP" xdotool search --onlyvisible --maxdepth 3 --name '' 2>/dev/null); do
+        [ "$w" = "$ROOT" ] && continue
+        nwin=$((nwin + 1))
+        X=0; Y=0; WIDTH=0; HEIGHT=0
+        eval "$(DISPLAY="$DISP" xdotool getwindowgeometry --shell "$w" 2>/dev/null)"
+        area=$((WIDTH * HEIGHT))
+        [ "$area" -gt "$bestarea" ] && { bestarea=$area; best=$w; bw=$WIDTH; bh=$HEIGHT; bx=$X; by=$Y; }
+    done
+
+    # the "main" window is the largest one using a meaningful share of the
+    # surface (more than ~1/6 of its area) -- this catches normal app windows
+    # but ignores small dialogs, tooltips and splashes.
+    if [ -n "$best" ] && [ -n "$sw" ] && [ -n "$sh" ] && \
+       [ "$bestarea" -gt $(( sw * sh / 6 )) ]; then
+        main_seen=1
+        # Keep the main window pinned to the surface: same position, same
+        # size, always -- so the app and its outer window move and resize as
+        # one, and the app cannot be dragged around inside a black area. If an
+        # app refuses the size (its own limits), stop after a few tries rather
+        # than fight it; a new surface size or window starts the tries again.
+        if [ -n "$DO_FILL" ]; then
+            key="$best $sw $sh"
+            [ "$key" != "$filled" ] && { filled="$key"; fill_tries=0; }
+            if [ "$bx" -ne 0 ] || [ "$by" -ne 0 ] || \
+               [ "$bw" -ne "$sw" ] || [ "$bh" -ne "$sh" ]; then
+                if [ "$fill_tries" -lt 6 ]; then
+                    DISPLAY="$DISP" xdotool windowmove "$best" 0 0 \
+                        windowsize "$best" "$sw" "$sh" 2>/dev/null
+                    fill_tries=$((fill_tries + 1))
+                fi
+            else
+                fill_tries=0
+            fi
+        fi
+    fi
+
+    # close: main window was seen, now nothing is mapped -> done (debounced)
+    if [ "$main_seen" = 1 ] && [ "$nwin" -eq 0 ]; then
+        gone=$((gone + 1))
+        [ "$gone" -ge 3 ] && break          # ~1.2s with no window
+    else
+        gone=0
+    fi
+    # small-window apps never set main_seen: fall back to the process exiting
+    if [ "$main_seen" = 0 ] && [ "$nwin" -eq 0 ] && ! kill -0 "$APP" 2>/dev/null; then
+        break
+    fi
+
+    sleep 0.4
+done
+
+# ---- Tear everything down ---------------------------------------------------
+cleanup

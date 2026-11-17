@@ -51,7 +51,7 @@ screens and scaling are at <https://mate-wayland.org/guides/>.
 | | |
 |---|---|
 | Base | Ubuntu 26.04 LTS packages, Linux 7.0, no GNOME Shell, no snap |
-| Display | Wayland, labwc 0.9 (wlroots); XWayland for X11-only programs |
+| Display | Wayland, labwc 0.9 (wlroots); XWayland for X11-only programs, with a launcher that runs them sharp on scaled screens |
 | Desktop | MATE 1.29: panel, Caja, Control Center, settings daemon, media; mate-applets 1.28 |
 | Login / installer | LightDM, Calamares 3.3 (LUKS2 option) |
 | Wayland tools | gtklock, swayidle, grim, slurp, satty, wdisplays, kanshi, wlr-randr |
@@ -59,7 +59,8 @@ screens and scaling are at <https://mate-wayland.org/guides/>.
 
 ## Build it
 
-On a Debian-family Linux machine with `debootstrap`, `apt` and `sudo`
+On a Debian-family Linux machine with `debootstrap`, `apt`, `sudo`, `curl`
+and a C compiler
 (nothing is installed on the build machine):
 
 ```sh

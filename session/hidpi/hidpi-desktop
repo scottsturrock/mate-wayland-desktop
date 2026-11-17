@@ -1,0 +1,127 @@
+#!/bin/sh
+# hidpi-desktop -- create (or remove) a menu launcher that runs an app crisp on
+# a HiDPI output, through hidpi-run. It writes a NEW .desktop in
+# ~/.local/share/applications called "<Name> (HiDPI)"; the app's original
+# launcher is left untouched, so you get a second menu entry. Part of MATE
+# Wayland Desktop.
+#
+# Usage:
+#   hidpi-desktop                   pick an app (GUI), create its HiDPI launcher
+#   hidpi-desktop NAME              NAME = installed app name or a .desktop path
+#   hidpi-desktop -f NAME           bake in options (e.g. -f fullscreen, -g WxH)
+#   hidpi-desktop --remove NAME     remove a HiDPI launcher made earlier
+set -u
+
+OPTS=""
+TARGET=""
+REMOVE=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --remove) REMOVE=1 ;;
+        -f|--fullscreen|--no-fill|--no-clip) OPTS="$OPTS $1" ;;
+        -o|--output|-g|--geometry|-s|--scale) OPTS="$OPTS $1 $2"; shift ;;
+        -h|--help) sed -n '2,13p' "$0"; exit 0 ;;
+        *) TARGET="$1" ;;
+    esac
+    shift
+done
+
+APPDIRS="$HOME/.local/share/applications /usr/share/applications"
+
+# The HiDPI launcher is written to the user's own applications folder, so it
+# needs no administrator rights. (--remove also finds one made elsewhere.)
+
+resolve_desktop() {
+    [ -f "$1" ] && { printf '%s\n' "$1"; return; }
+    for d in $APPDIRS; do
+        [ -f "$d/$1" ]         && { printf '%s\n' "$d/$1"; return; }
+        [ -f "$d/$1.desktop" ] && { printf '%s\n' "$d/$1.desktop"; return; }
+    done
+}
+
+refresh() {   # $1 = directory to refresh
+    command -v update-desktop-database >/dev/null 2>&1 || return 0
+    if [ -w "$1" ]; then update-desktop-database "$1" 2>/dev/null
+    else sudo update-desktop-database "$1" 2>/dev/null; fi
+    return 0
+}
+
+# ---- remove mode -----------------------------------------------------------
+if [ -n "$REMOVE" ]; then
+    [ -n "$TARGET" ] || { echo "hidpi-desktop: --remove needs an app name or path." >&2; exit 2; }
+    base=$(basename "$TARGET" .desktop)
+    out=""
+    # if given a path, look next to it first
+    if [ -f "$TARGET" ] && [ -f "$(dirname "$TARGET")/${base}-hidpi.desktop" ]; then
+        out="$(dirname "$TARGET")/${base}-hidpi.desktop"
+    fi
+    # otherwise search the standard app dirs
+    if [ -z "$out" ]; then
+        for d in $APPDIRS; do
+            [ -f "$d/${base}-hidpi.desktop" ] && { out="$d/${base}-hidpi.desktop"; break; }
+        done
+    fi
+    if [ -n "$out" ]; then
+        d=$(dirname "$out")
+        if [ -w "$d" ]; then rm -f "$out"; else sudo rm -f "$out"; fi
+        refresh "$d"
+        echo "Removed: $out"
+    else
+        echo "hidpi-desktop: no HiDPI launcher found for '$TARGET'." >&2; exit 1
+    fi
+    exit 0
+fi
+
+# ---- find the source .desktop ----------------------------------------------
+if [ -z "$TARGET" ]; then
+    command -v zenity >/dev/null || { echo "hidpi-desktop: give an app name or .desktop path." >&2; exit 2; }
+    src=$(zenity --file-selection --title="Create a HiDPI launcher: pick an app" \
+            --filename=/usr/share/applications/ \
+            --file-filter='Applications | *.desktop' 2>/dev/null) || exit 0
+else
+    src=$(resolve_desktop "$TARGET")
+fi
+[ -n "$src" ] && [ -f "$src" ] || { echo "hidpi-desktop: app not found: ${TARGET:-}" >&2; exit 1; }
+
+# ---- read the fields we want to carry over ---------------------------------
+field() { grep -m1 "^$1=" "$src" | cut -d= -f2-; }
+name=$(field Name);       [ -z "$name" ] && name=$(basename "$src" .desktop)
+icon=$(field Icon)
+comment=$(field Comment)
+categories=$(field Categories)
+
+HR=$(command -v hidpi-run) || { echo "hidpi-desktop: hidpi-run not on PATH." >&2; exit 1; }
+
+base=$(basename "$src" .desktop)
+destdir="$HOME/.local/share/applications"
+mkdir -p "$destdir"
+out="$destdir/${base}-hidpi.desktop"
+
+tmp=$(mktemp)
+{
+    echo "[Desktop Entry]"
+    echo "Type=Application"
+    echo "Name=$name (HiDPI)"
+    if [ -n "$comment" ]; then
+        echo "Comment=$comment (sharp on HiDPI)"
+    else
+        echo "Comment=Sharp on HiDPI, through hidpi-run"
+    fi
+    echo "Exec=$HR$OPTS \"$src\""
+    [ -n "$icon" ]       && echo "Icon=$icon"
+    [ -n "$categories" ] && echo "Categories=$categories"
+    echo "Terminal=false"
+    echo "StartupNotify=false"
+} > "$tmp"
+
+if [ -w "$destdir" ]; then
+    cp "$tmp" "$out" && chmod 644 "$out"
+else
+    sudo cp "$tmp" "$out" && sudo chmod 644 "$out"
+fi
+rm -f "$tmp"
+refresh "$destdir"
+
+echo "Created: $out"
+echo "Menu entry: \"$name (HiDPI)\""
+echo "Runs:       $HR$OPTS \"$src\""

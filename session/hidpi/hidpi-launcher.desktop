@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=HiDPI Launcher
+Comment=Pick any program and run it sharp on a high-resolution screen
+Exec=hidpi-menu
+Icon=preferences-desktop-display
+Categories=Utility;
+Terminal=false
+StartupNotify=false
+Keywords=hidpi;sharp;blurry;fuzzy;xwayland;scale;java;

@@ -20,6 +20,18 @@ libnotify-bin
 # these two.
 libgtk-4-1
 libadwaita-1-0
+# HiDPI launcher (hidpi-run, hidpi-menu): runs an X11 program in its own
+# high-resolution Xwayland window so it is sharp on a scaled screen. xdotool
+# and x11-utils watch and size the program's window, xclip carries the
+# clipboard across, fuzzel is the picker, zenity the file chooser, libdecor
+# is what Xwayland needs to run in a window of its own.
+xdotool
+xclip
+x11-utils
+fuzzel
+zenity
+libdecor-0-0
+libdecor-0-plugin-1-gtk
 # Media keys (play, pause, next)
 playerctl
 wdisplays
